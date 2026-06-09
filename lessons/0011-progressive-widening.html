@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0011: Progressive Widening</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; overflow-x: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0011: Progressive Widening</h1>
+<p class="subtitle">Solving the Curse of Dimensionality in massively stochastic environments.</p>
+
+<h2>1. The Curse of Wide Chance Nodes</h2>
+<p>
+    In <strong>Lesson 0010</strong>, we explicitly modeled Chance Nodes to properly evaluate expected value in a stochastic game. However, Yahtzee dice rolls have up to 252 possible outcomes. If a Chance Node blindly explores every unique dice roll it encounters, its visits get spread disastrously thin across hundreds of children.
+</p>
+<p>
+    This means if an action gets visited 15 times during MCTS, it might spawn 15 distinct children. Each child has only <code>visits = 1</code>, resulting in massive variance and noise. The algorithm can never confidently evaluate the action because it never samples the <em>same</em> outcome twice to build statistical significance.
+</p>
+
+<h2>2. The Theory: Progressive Widening</h2>
+<p>
+    <strong>Progressive Widening (PW)</strong> is an elegant mathematical solution to this problem. Instead of blindly letting a Chance Node spawn infinite children, we artificially restrict its branching factor based on how many times the node has been visited.
+</p>
+<p>
+    The standard formula limits the maximum number of allowed children (<code>C</code>) to:
+    <br><br>
+    <strong>C = &lceil;k &times; N<sup>&alpha;</sup>&rceil;</strong>
+    <br><br>
+    Where <code>N</code> is the number of visits to the node, and <code>k</code> and <code>&alpha;</code> are tunable parameters (commonly <code>k = 2.0</code>, <code>&alpha; = 0.5</code>).
+</p>
+<p>
+    As the node receives more visits, we progressively "widen" it by allowing it to explore more unique chance outcomes. But initially, we force it to repeatedly test just a handful of outcomes so it can achieve statistical depth.
+</p>
+
+<h2>3. The Implementation</h2>
+<p>
+    In our <code>ChanceNode</code>, we added a <code>natural_counts</code> dictionary to track how often the environment naturally produces specific outcomes. 
+</p>
+<div class="code-block">class ChanceNode:
+    def __init__(self, action: Tuple[str, Any], parent: 'DecisionNode'):
+        self.action = action
+        # ...
+        self.children: Dict[YahtzeeState, 'DecisionNode'] = {}
+        self.natural_counts: Dict[YahtzeeState, int] = {}
+</div>
+<p>
+    During the Tree Policy traversal, we calculate the allowed width. If the node is full, we <strong>block</strong> the sampling of a new state and instead force the algorithm to traverse one of the existing children. Crucially, we use <code>random.choices</code> weighted by <code>natural_counts</code> to perfectly preserve the true probability distribution of the dice!
+</p>
+<div class="code-block">max_children = max(1, math.ceil(k * (best_chance_node.visits ** alpha)))
+
+if len(best_chance_node.children) < max_children:
+    # Allowed to widen! Sample a new outcome from the environment.
+    next_state = node.state.apply(best_action)
+    if next_state not in best_chance_node.children:
+        # Create a new branch
+        child_decision = DecisionNode(next_state, parent=best_chance_node)
+        best_chance_node.children[next_state] = child_decision
+        best_chance_node.natural_counts[next_state] = 1
+    else:
+        best_chance_node.natural_counts[next_state] += 1
+else:
+    # Restricted! Must sample from already discovered outcomes based on natural frequency.
+    states = list(best_chance_node.children.keys())
+    weights = [best_chance_node.natural_counts[s] for s in states]
+    next_state = random.choices(states, weights=weights, k=1)[0]
+</div>
+
+<h2>4. The Final 50,000 Iteration Benchmark</h2>
+<p>
+    To truly test if Progressive Widening solved our Yahtzee engine, we ran a massive 50,000-iteration benchmark (with <code>Cp = 40.0</code>). Here is how it compares to our previous attempts:
+</p>
+<ul>
+    <li><strong>Open-Loop MCTS (500 iters):</strong> ~156.5 pts</li>
+    <li><strong>ExpectiMax MCTS (500 iters):</strong> ~152.2 pts</li>
+    <li><strong>ExpectiMax MCTS (50,000 iters):</strong> ~184.2 pts</li>
+    <li><strong>0-ply Search (Pure Heuristic):</strong> ~191.3 pts</li>
+    <li><strong>ExpectiMax + PW MCTS (500 iters):</strong> ~162.0 pts</li>
+    <li><strong>ExpectiMax + PW MCTS (50,000 iters):</strong> ~190.5 pts</li>
+</ul>
+
+<div class="callout-info">
+    <strong>The Grand Conclusion:</strong> Even with Progressive Widening restricting the chance nodes, and even after throwing massive computational power (50,000 iterations) at the problem, the MCTS only managed to climb to <strong>190.5 points</strong>, mathematically tying the raw 0-ply heuristic (191.3 points).
+    <br><br>
+    This is the ultimate punchline of our AI experiment. It perfectly illustrates the limitations of Monte Carlo Tree Search. MCTS is a phenomenal algorithm for games with massive state spaces and deep, deterministic tactics (like Chess or Go). However, in a heavily stochastic game like Yahtzee, MCTS acts as a statistical sledgehammer. To truly beat the heuristic, the algorithm would require millions of iterations to converge on the exact probabilities.
+    <br><br>
+    For games like Yahtzee or Blackjack, the state space is actually surprisingly small. The computationally correct approach is never MCTS; it is <strong>Value Iteration / Dynamic Programming</strong>, which simply calculates the perfect expected value from the bottom up. 
+</div>
+
+</div>
+</body>
+</html>
