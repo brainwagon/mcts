@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appendix A: Choosing the Ideal Game for MCTS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Appendix A: Choosing the Ideal Game for MCTS</h1>
+<p class="subtitle">A retrospective on state spaces, stochasticity, and why Yahtzee was a beautiful mistake.</p>
+
+<h2>1. The Yahtzee Trap: A "Textbook Hallucination"</h2>
+<p>
+    Early in this curriculum, Yahtzee was proposed as an "ideal" candidate for MCTS. To a textbook or an AI relying purely on theory, Yahtzee looks like a standard <strong>Markov Decision Process (MDP)</strong>: it has discrete states, perfect information, and clear mathematical rewards. Because MCTS is proven to converge on the optimal policy for any MDP given infinite time, it seemed like a perfect match.
+</p>
+<p>
+    However, this ignores the practical engineering reality of the algorithm. We can demonstrate exactly why MCTS was doomed to struggle in Yahtzee by looking at two numbers:
+</p>
+<ul>
+    <li><strong>The State Space (1.2 Billion):</strong> MCTS is an approximation algorithm designed for games like Go (which has $10^{170}$ states) where exhaustive calculation is impossible. Yahtzee only has about 1.2 billion unique states. In modern computing, this easily fits in RAM. Because the state space is so small, we can use <strong>Dynamic Programming (Value Iteration)</strong> to calculate the exact, mathematically perfect expected value of every state from the bottom up in minutes. <em>Never use a noisy approximation algorithm if the state space is small enough to be solved by exact math.</em></li>
+    <li><strong>The Width of Chance Nodes (252 Outcomes):</strong> Rolling 5 six-sided dice results in 252 unique combinations. MCTS builds statistical confidence by repeatedly sampling the same branches. If a single "roll" splits into 252 branches, you need tens of thousands of iterations just to give each branch a handful of visits. The high variance completely drowns out the signal.</li>
+</ul>
+
+<h2>2. Ideal Two-Player Games for MCTS</h2>
+<p>
+    To showcase the true magic of MCTS, a game needs a massive state space (making Dynamic Programming impossible) and it needs to be hard to evaluate with traditional human-written heuristics (making Minimax struggle).
+</p>
+<h3>Hex (11x11 Board)</h3>
+<p>
+    This is the canonical game used to teach MCTS in universities. Players take turns placing red or blue hexagons on a grid, trying to connect their two sides of the board. It is incredibly difficult for a human to write a heuristic formula that scores a half-finished Hex board. But MCTS, using pure random rollouts, naturally "discovers" complex blocking strategies and connection tactics without needing any human knowledge programmed into it.
+</p>
+<h3>Gomoku (Five-in-a-Row)</h3>
+<p>
+    Played on a 15x15 Go board, players take turns placing black and white stones. The branching factor starts at 225, making Minimax choke almost immediately. MCTS handles Gomoku beautifully, quickly focusing its search on the local clusters of stones where the action is happening.
+</p>
+
+<h2>3. Ideal Single-Player Games (SP-MCTS)</h2>
+<p>
+    There is a specialized sub-field called <strong>Single-Player MCTS (SP-MCTS)</strong> designed for optimization puzzles where you simply seek to maximize a score.
+</p>
+<h3>SameGame (Purely Deterministic)</h3>
+<p>
+    Also known as <em>Clickomania</em>, this is a grid puzzle where clicking adjacent blocks of the same color destroys them, scoring points exponentially based on the group size. It is 100% deterministic, but the state space is astronomically large. SP-MCTS is incredibly famous for solving SameGame; random rollouts play out to the end, and the tree slowly discovers profound, deeply hidden sequences that group 20+ blocks together for massive payouts.
+</p>
+<h3>2048 (Low-Variance Stochastic)</h3>
+<p>
+    You slide tiles on a 4x4 grid to combine matching numbers. Every time you move, a new "2" or "4" tile randomly spawns. Unlike Yahtzee's 252 outcomes, the randomness in 2048 is highly constrained (e.g., 5 empty squares &times; 2 possible tile values = 10 outcomes). 2048 is the absolute perfect game to teach <strong>ExpectiMax MCTS</strong>, as the chance nodes are narrow enough for the algorithm to accurately model the probability distributions.
+</p>
+<h3>FreeCell Solitaire (Perfect Information)</h3>
+<p>
+    Unlike Klondike, all cards in FreeCell are dealt face-up at the start. It is a pure logic puzzle with no dice or random card draws once the game begins. The low branching factor allows the MCTS to search incredibly deep into the future to find the specific sequence of moves that untangles the deck.
+</p>
+
+<div class="callout-info">
+    <strong>Takeaway:</strong> Yahtzee was a beautiful mistake that taught us the boundaries of MCTS. If you are building a new engine, match the algorithm to the math of the game. Use <strong>Dynamic Programming</strong> for small state spaces, <strong>ExpectiMax MCTS</strong> for low-variance randomness (2048), and <strong>Deterministic MCTS</strong> for combinatorial explosions (Hex, SameGame).
+</div>
+
+</div>
+</body>
+</html>
