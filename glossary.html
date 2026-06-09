@@ -83,6 +83,21 @@
 
   <dt>Anytime Algorithm</dt>
   <dd>An algorithm that can return a reasonable answer at any point and improves its answer given more computation time. MCTS is a classic anytime algorithm.</dd>
+
+  <dt>Open-Loop MCTS</dt>
+  <dd>An MCTS architecture that plans a single, rigid sequence of actions without branching on intermediate environment responses. Fast and effective for deterministic games, but hallucinates in Fully Observable Stochastic environments like Yahtzee.</dd>
+
+  <dt>Closed-Loop MCTS (ExpectiMax MCTS)</dt>
+  <dd>An architecture where the tree explicitly alternates between Player Decision nodes and Environment Chance nodes. Allows the agent to learn reactive, conditional policies based on dice rolls or random outcomes.</dd>
+
+  <dt>Markov Decision Process (MDP)</dt>
+  <dd>A mathematical framework for modeling decision making in situations where outcomes are partly random and partly under the control of a decision maker. Yahtzee is a classic MDP.</dd>
+
+  <dt>Dynamic Programming / Value Iteration</dt>
+  <dd>Exact algorithmic techniques for solving MDPs by working backward from terminal states. They compute the mathematically perfect expected value of every state. Often vastly superior to MCTS in games with small state spaces but high variance.</dd>
+
+  <dt>Progressive Widening</dt>
+  <dd>A technique to rescue MCTS from the "Curse of Dimensionality" caused by massively wide chance nodes. It artificially limits the number of stochastic outcomes (e.g. dice rolls) the tree is allowed to sample from a node until that node has received enough visits to justify exploring more branches.</dd>
 </dl>
 
 <h2>Tradeoffs <span class="tag tag-tradeoff">Tradeoff</span></h2>
