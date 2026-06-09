@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0002: Implementing Selection in Code</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #1a1a2e;
+    background: #f8f9fa;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    padding: 2.5rem 2rem;
+  }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 {
+    font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem;
+    color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem;
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout {
+    background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout strong { color: #856404; }
+  .callout-info {
+    background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout-info strong { color: #0c5460; }
+  .code-block {
+    background: #1e1e2e; color: #cdd6f4; border-radius: 10px;
+    padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    overflow-x: auto; line-height: 1.5; white-space: pre;
+  }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .code-block .hl { background: #313244; display: inline-block; width: 100%; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn {
+    background: #16213e; color: #fff; border: none; border-radius: 6px;
+    padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem;
+    transition: background 0.15s;
+  }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  @media (max-width: 600px) {
+    .container { padding: 1.5rem 1rem; }
+    h1 { font-size: 1.4rem; }
+    .code-block { font-size: 0.75rem; padding: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0002: Implementing Selection in Code</h1>
+<p class="subtitle">Turning the UCT formula into working Python — the <tt>select_child</tt> and <tt>tree_policy</tt> functions.</p>
+
+<h2>1. The Shape of an MCTS Node</h2>
+<p>
+    Every node in our search tree needs to store four things: the game state it represents, its parent link, the children it has expanded, and the statistics that UCT needs ($n$, $w$). It also needs to know <em>which moves haven't been tried yet</em> &mdash; because during Selection we need to know when we've hit a frontier.
+</p>
+
+<p>Here's a minimal <tt>MCTSNode</tt>:</p>
+
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">MCTSNode</span>:
+    <span class="cm">"""A node in the MCTS search tree."""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="kw">self</span>, state, parent=<span class="kw">None</span>):
+        <span class="kw">self</span>.state = state                <span class="cm"># game-specific state object</span>
+        <span class="kw">self</span>.parent = parent              <span class="cm"># parent MCTSNode (None for root)</span>
+        <span class="kw">self</span>.children = []                <span class="cm"># list of child MCTSNode objects</span>
+        <span class="kw">self</span>._untried_moves = <span class="kw">None</span>    <span class="cm"># moves not yet expanded (lazy)</span>
+        <span class="kw">self</span>.visits = <span class="num">0</span>                  <span class="cm"># n(s) — total visits to this node</span>
+        <span class="kw">self</span>.wins = <span class="num">0</span>                    <span class="cm"># w(s) — total reward through this node</span>
+
+    <span class="cm"># ── Properties ──</span>
+    @property
+    <span class="kw">def</span> <span class="fn">untried_moves</span>(<span class="kw">self</span>):
+        <span class="cm">"""Legal moves not yet expanded as child nodes."""</span>
+        <span class="kw">if</span> <span class="kw">self</span>._untried_moves <span class="kw">is</span> <span class="kw">None</span>:
+            <span class="kw">self</span>._untried_moves = <span class="kw">self</span>.state.legal_moves()
+        <span class="kw">return</span> <span class="kw">self</span>._untried_moves
+
+    @property
+    <span class="kw">def</span> <span class="fn">is_fully_expanded</span>(<span class="kw">self</span>):
+        <span class="cm">"""True if every legal move has been expanded."""</span>
+        <span class="kw">return</span> <span class="fn">len</span>(<span class="kw">self</span>.untried_moves) == <span class="num">0</span>
+
+    @property
+    <span class="kw">def</span> <span class="fn">is_terminal</span>(<span class="kw">self</span>):
+        <span class="cm">"""True if this state ends the game."""</span>
+        <span class="kw">return</span> <span class="kw">self</span>.state.is_terminal()
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Design note:</strong> <tt>_untried_moves</tt> is computed lazily from <tt>state.legal_moves()</tt> and stored so we don't recompute it. As we expand children, we remove moves from this list. The game-specific <tt>state</tt> object must define <tt>legal_moves()</tt> and <tt>is_terminal()</tt>.
+</div>
+
+<h2>2. Selecting a Child with UCT</h2>
+<p>
+    This is the core function from Lesson 0001. Given a parent node, pick the child that maximises:
+</p>
+
+<div class="code-block">
+    $\displaystyle \text{UCT}(s,a) = \frac{w(s,a)}{n(s,a)} + C_p \sqrt{\frac{\ln N(s)}{n(s,a)}}$
+</div>
+
+<div class="code-block">
+<span class="kw">import</span> math
+
+<span class="kw">def</span> <span class="fn">uct_select_child</span>(node, Cp=<span class="num">1.414</span>):
+    <span class="cm">"""Return the child of `node` with the highest UCT score."""</span>
+    best_score = -float(<span class="str">'inf'</span>)
+    best_child = <span class="kw">None</span>
+
+    <span class="kw">for</span> child <span class="kw">in</span> node.children:
+        <span class="cm"># Unvisited children get priority (infinite UCT)</span>
+        <span class="kw">if</span> child.visits == <span class="num">0</span>:
+            <span class="kw">return</span> child
+
+        exploit = child.wins / child.visits
+        explore = Cp * math.sqrt(math.log(node.visits) / child.visits)
+        score = exploit + explore
+
+        <span class="kw">if</span> score &gt; best_score:
+            best_score = score
+            best_child = child
+
+    <span class="kw">return</span> best_child
+</div>
+
+<div class="callout">
+    <strong>&#9888;&#65039; Important detail:</strong> The <tt>if child.visits == 0: return child</tt> line ensures any unvisited child is chosen immediately. Because we check this <em>before</em> computing scores, a node with multiple unvisited children returns the first one encountered. This is fine — they'll all get visited.
+</div>
+
+<h2>3. The Tree Policy: Descending to a Frontier</h2>
+<p>
+    Selection is not just one <tt>uct_select_child</tt> call &mdash; it's a <em>loop</em> that descends the tree until it finds a node that isn't fully expanded (or is terminal). This loop is called the <strong>tree policy</strong>.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">tree_policy</span>(node, Cp=<span class="num">1.414</span>):
+    <span class="cm">"""Descend from `node` to a frontier node using UCT selection.</span>
+<span class="cm">       Returns a node suitable for expansion (or a terminal node)."""</span>
+    <span class="kw">while</span> <span class="kw">not</span> node.is_terminal:
+        <span class="kw">if</span> <span class="kw">not</span> node.is_fully_expanded:
+            <span class="cm"># Found a frontier — stop here for expansion</span>
+            <span class="kw">return</span> node
+        <span class="kw">else</span>:
+            <span class="cm"># Fully expanded: use UCT to pick the best child</span>
+            node = <span class="fn">uct_select_child</span>(node, Cp)
+    <span class="kw">return</span> node  <span class="cm"># terminal node reached</span>
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Why two paths?</strong> If a node <em>isn't</em> fully expanded, we stop and let the <strong>Expansion</strong> phase add a new child. If it <em>is</em> fully expanded, we use UCT to descend deeper. This is the elegant balance: UCT guides us through known territory, and when we hit the unknown, we stop to explore.
+</div>
+
+<h2>4. Picking the Best Move After Search</h2>
+<p>
+    After running thousands of MCTS iterations, the root node will have many children with rich statistics. To choose the <em>final</em> move to play, we use a different criterion: <strong>pure exploitation</strong>. The most common strategy is to pick the child with the highest visit count (robust child), not the highest win rate.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">best_move</span>(node):
+    <span class="cm">"""After MCTS is complete, choose the most-visited child.</span>
+<span class="cm">       Returns the child node (or None if no children exist)."""</span>
+    <span class="kw">if</span> <span class="kw">not</span> node.children:
+        <span class="kw">return</span> <span class="kw">None</span>
+    <span class="kw">return</span> <span class="fn">max</span>(node.children, key=<span class="kw">lambda</span> c: c.visits)
+</div>
+
+<table>
+  <tr>
+    <th>Strategy</th>
+    <th>Criterion</th>
+    <th>When to Use</th>
+  </tr>
+  <tr>
+    <td>Robust child (most visits)</td>
+    <td>$\arg\max n(s,a)$</td>
+    <td>Default &mdash; statistically most reliable</td>
+  </tr>
+  <tr>
+    <td>Max child (highest win rate)</td>
+    <td>$\arg\max w(s,a) / n(s,a)$</td>
+    <td>When visit counts are similar; can overfit noise</td>
+  </tr>
+  <tr>
+    <td>Robust-max child</td>
+    <td>Highest win rate <em>among</em> those with max visits</td>
+    <td>Tie-breaking; combines reliability with quality</td>
+  </tr>
+</table>
+
+<h2>5. The Full Selection Phase, Annotated</h2>
+<p>
+    Here's how the Selection phase fits into a single MCTS iteration:
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">mcts_iteration</span>(root, Cp=<span class="num">1.414</span>):
+    <span class="cm"># 1. SELECTION — descend to a frontier or terminal node</span>
+    node = <span class="fn">tree_policy</span>(root, Cp)
+
+    <span class="cm"># 2. EXPANSION — if not terminal, add one new child</span>
+    <span class="kw">if</span> <span class="kw">not</span> node.is_terminal:
+        node = <span class="fn">expand</span>(node)  <span class="cm"># expands one untried move</span>
+
+    <span class="cm"># 3. SIMULATION — rollout from the new/terminal node</span>
+    reward = <span class="fn">simulate</span>(node)
+
+    <span class="cm"># 4. BACKPROPAGATION — update stats up the tree</span>
+    <span class="fn">backpropagate</span>(node, reward)
+</div>
+
+<p>
+    Notice that <tt>tree_policy</tt> may return a terminal node (e.g., checkmate on the board). In that case, <tt>expand</tt> is skipped and the simulation just returns the known result — no rollout needed.
+</p>
+
+<h2>6. Putting It All Together: A Minimal Engine</h2>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">mcts_search</span>(root_state, iterations=<span class="num">1000</span>, Cp=<span class="num">1.414</span>):
+    <span class="cm">"""Run MCTS from `root_state` and return the best action."""</span>
+    root = <span class="cls">MCTSNode</span>(root_state)
+
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(iterations):
+        <span class="fn">mcts_iteration</span>(root, Cp)
+
+    best = <span class="fn">best_move</span>(root)
+    <span class="kw">return</span> best.state.last_action  <span class="cm"># the action that led to this child</span>
+</div>
+
+<div class="callout">
+    <strong>&#9888;&#65039; Key constraint:</strong> The <tt>state</tt> object must store the <tt>last_action</tt> that produced it, so we can retrieve which move to play. This is a common pattern &mdash; each node's state remembers how it was reached.
+</div>
+
+<h2>7. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Selection in Code</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. What does <tt>tree_policy</tt> return when it encounters a terminal node?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">The terminal node itself</button>
+      <button class="quiz-btn" data-answer="wrong">The root node</button>
+      <button class="quiz-btn" data-answer="wrong">A new expanded child</button>
+    </div>
+    <div class="quiz-feedback">Correct! If the reached node is terminal (game over), it's returned directly. The Expansion step will skip it, and the Simulation step returns the known result.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. Why does <tt>best_move</tt> use visit count instead of UCT score?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Visit counts are faster to compute</button>
+      <button class="quiz-btn" data-answer="correct">Visit count is a more reliable signal after many iterations</button>
+      <button class="quiz-btn" data-answer="wrong">UCT only works during search, not after</button>
+    </div>
+    <div class="quiz-feedback">Correct! After enough iterations, the visit count reflects the algorithm's confidence. The child with the most visits has been explored thoroughly and converged upon. It's more robust than picking the highest win rate (which could be lucky noise from few visits).</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. If a node has 3 children all with <tt>visits &gt; 0</tt>, what happens when Selection reaches it?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">It expands a new child</button>
+      <button class="quiz-btn" data-answer="correct">It uses UCT to pick the best child and continues descending</button>
+      <button class="quiz-btn" data-answer="wrong">It stops and runs a simulation</button>
+    </div>
+    <div class="quiz-feedback">Correct! Since all children have been visited and all moves expanded, the node is fully expanded. <tt>tree_policy</tt> selects the highest-UCT child and keeps descending until it finds a frontier or terminal node.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What does <tt>uct_select_child</tt> do when it finds a child with <tt>visits == 0</tt>?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">Immediately returns that child</button>
+      <button class="quiz-btn" data-answer="wrong">Scores it as 0 and continues checking others</button>
+      <button class="quiz-btn" data-answer="wrong">Throws an exception</button>
+    </div>
+    <div class="quiz-feedback">Correct! Unvisited children get $+\infty$ UCT, so the function short-circuits and returns the first one found. This guarantees every child is sampled at least once.</div>
+  </div>
+</div>
+
+<h2>8. Summary</h2>
+<ul>
+  <li><strong>MCTSNode</strong> stores state, parent, children, $n$, $w$, and untried moves.</li>
+  <li><strong>uct_select_child</strong> implements $\text{UCT} = w/n + C_p\sqrt{\ln N / n}$, with a short-circuit for unvisited children.</li>
+  <li><strong>tree_policy</strong> loops down the tree until it finds a frontier (not fully expanded) or a terminal node.</li>
+  <li><strong>best_move</strong> picks the most-visited child after search ends &mdash; the "robust child" strategy.</li>
+  <li>The state object must expose <tt>legal_moves()</tt>, <tt>is_terminal()</tt>, and <tt>last_action</tt>.</li>
+</ul>
+
+<p class="cite">
+  <strong>References:</strong> Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG.
+  &bull; See the <a href="../reference/glossary.html">glossary</a> for term definitions.
+</p>
+
+<div class="callout-info">
+  <strong>&#128172; Up next:</strong> Lesson 0003 will cover the <strong>Expansion and Simulation</strong> phases &mdash; adding nodes to the tree and running rollouts. By then you'll have the full four-phase loop wired together.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

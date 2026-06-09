@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0006: Memory, Parallelism, and Advanced Tradeoffs</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout strong { color: #856404; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info strong { color: #0c5460; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design strong { color: #1d6f42; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; overflow-x: auto; line-height: 1.5; white-space: pre; }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .code-block .hl { background: #313244; display: inline-block; width: 100%; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn { background: #16213e; color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem; transition: background 0.15s; }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  .figure-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; text-align: center; font-size: 0.9rem; }
+  @media (max-width: 600px) { .container { padding: 1.5rem 1rem; } h1 { font-size: 1.4rem; } .code-block { font-size: 0.75rem; padding: 0.8rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0006: Memory, Parallelism, and Advanced Tradeoffs</h1>
+<p class="subtitle">Taking your MCTS engine from a proof-of-concept to a production-quality system.</p>
+
+<h2>1. Tree Reuse Across Moves</h2>
+<p>
+    After <tt>mcts_search</tt> returns the best action, the opponent makes their move. We could discard the entire tree and rebuild from scratch &mdash; but that's wasteful. The subtree rooted at the opponent's chosen move is still valid.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">advance_root</span>(tree, opponent_move):
+    <span class="cm">"""After the opponent plays, reuse the relevant subtree.</span>
+<span class="cm">       Returns the child node that matches the opponent's move."""</span>
+    <span class="kw">for</span> child <span class="kw">in</span> tree.children:
+        <span class="kw">if</span> child.state.last_action == opponent_move:
+            <span class="cm"># Detach from parent, making this node the new root</span>
+            child.parent = <span class="kw">None</span>
+            <span class="kw">return</span> child
+    <span class="kw">return</span> <span class="kw">None</span>  <span class="cm"># no match; caller should rebuild</span>
+</div>
+
+<div class="callout-design">
+    <strong>&#129504; Why tree reuse matters:</strong> Imagine you ran 100,000 iterations to analyze the current position. After the opponent moves, the relevant subtree might already contain 5,000&ndash;20,000 iterations of data. By reusing it, you don't start from scratch &mdash; you keep that analysis and <em>continue</em> deepening it. This is one of the biggest performance wins in any MCTS engine.
+</div>
+
+<h2>2. Memory Management</h2>
+<p>
+    Each MCTS node holds references to its state, parent, and children. In a long-running game with deep trees, memory can become a concern. Here are strategies:
+</p>
+
+<table>
+    <tr><th>Strategy</th><th>How It Works</th><th>When to Use</th></tr>
+    <tr><td>No pruning</td><td>Keep every node in memory</td><td>Prototyping, games with &lt;100K nodes</td></tr>
+    <tr><td>Threshold pruning</td><td>Keep only nodes with visits $&gt; k$</td><td>High-branching games (Go, large Chess)</td></tr>
+    <tr><td>Virtual loss</td><td>Artificially inflate visit count to discourage threads</td><td>Parallel search (covered below)</td></tr>
+    <tr><td>Transposition table</td><td>Hash states to nodes; merge equivalent positions</td><td>Games with many transpositions (Chess, Checkers)</td></tr>
+</table>
+
+<h3>2.1 Transposition Tables</h3>
+<p>
+    In many games, the same board position can be reached through different move sequences (transpositions). A <strong>transposition table</strong> hashes the game state and merges nodes that represent the same position. This collapses the tree and avoids redundant computation.
+</p>
+
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">MCTSNode</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, state, parent=None, transposition_table=None):
+        self.state = state
+        self.parent = parent
+        self.children = []
+        self._untried_moves = <span class="kw">None</span>
+        self.visits = <span class="num">0</span>
+        self.wins = <span class="num">0</span>
+
+        <span class="kw">if</span> transposition_table <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+            h = <span class="fn">hash</span>(state)
+            <span class="kw">if</span> h <span class="kw">in</span> transposition_table:
+                <span class="cm"># Merge statistics from the existing equivalent node</span>
+                existing = transposition_table[h]
+                self.visits = existing.visits
+                self.wins = existing.wins
+                self.children = existing.children
+            <span class="kw">else</span>:
+                transposition_table[h] = self
+</div>
+
+<div class="callout">
+    <strong>&#9888;&#65039; Caution:</strong> Transposition tables add complexity. The hash function must be fast and collision-free (or handle collisions). For games with no transpositions (like Go, where every stone placement is unique), they add overhead for no benefit.
+</div>
+
+<h2>3. Parallel MCTS</h2>
+<p>
+    MCTS is embarrassingly parallel &mdash; you can run many iterations simultaneously. But there's a catch: if two threads both try to update the same node's statistics at the same time, you get race conditions.
+</p>
+
+<h3>3.1 Root Parallelism (Simple)</h3>
+<p>
+    Run $N$ independent MCTS searches from the same root, each on its own thread. After all finish, average their visit counts. No shared state, no locks &mdash; but each thread wastes time rebuilding the same tree.
+</p>
+
+<div class="code-block">
+<span class="kw">from</span> concurrent.futures <span class="kw">import</span> ThreadPoolExecutor
+
+<span class="kw">def</span> <span class="fn">parallel_mcts_search</span>(root_state, total_iterations, num_threads=<span class="num">4</span>, Cp=<span class="num">1.414</span>):
+    iters_per_thread = total_iterations // num_threads
+    roots = []
+
+    <span class="kw">with</span> <span class="cls">ThreadPoolExecutor</span>(max_workers=num_threads) <span class="kw">as</span> executor:
+        futures = []
+        <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(num_threads):
+            root = <span class="cls">MCTSNode</span>(root_state)
+            roots.append(root)
+            futures.append(executor.submit(<span class="fn">_run_search</span>, root, iters_per_thread, Cp))
+
+    <span class="cm"># Average visit counts across all independent trees</span>
+    combined = <span class="cls">MCTSNode</span>(root_state)
+    <span class="kw">for</span> r <span class="kw">in</span> roots:
+        <span class="kw">for</span> child <span class="kw">in</span> r.children:
+            <span class="cm"># find corresponding child in combined and merge stats</span>
+            <span class="fn">merge_into</span>(child, combined)
+
+    <span class="kw">return</span> <span class="fn">best_move</span>(combined)
+</div>
+
+<h3>3.2 Tree Parallelism (Advanced)</h3>
+<p>
+    Share a single tree across all threads. Each iteration still follows the four phases, but threads coordinate on shared node statistics. This is more memory-efficient but requires <strong>virtual loss</strong>: before descending, a thread increments a node's visit count (artificially) as a "lock" to discourage other threads from following the same path.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">uct_select_child_parallel</span>(node, Cp):
+    <span class="cm">"""Like uct_select_child, but treats virtual losses as extra visits.</span>
+<span class="cm">       A thread currently searching this path has already incremented</span>
+<span class="cm">       node.visits (virtual loss), making it less attractive to others."""</span>
+    best_score = -float(<span class="str">'inf'</span>)
+    best_child = <span class="kw">None</span>
+    <span class="kw">for</span> child <span class="kw">in</span> node.children:
+        <span class="kw">if</span> child.visits == <span class="num">0</span>:
+            <span class="kw">return</span> child
+        exploit = child.wins / child.visits
+        explore = Cp * math.sqrt(math.log(node.visits) / child.visits)
+        score = exploit + explore
+        <span class="kw">if</span> score &gt; best_score:
+            best_score = score
+            best_child = child
+    <span class="kw">return</span> best_child
+</div>
+
+<div class="callout-design">
+    <strong>&#129504; Tradeoff: Root vs. Tree Parallelism</strong><br><br>
+    <table>
+        <tr><th></th><th>Root Parallelism</th><th>Tree Parallelism</th></tr>
+        <tr><td><strong>Complexity</strong></td><td>Low (independent threads)</td><td>High (shared state, locks/virtual loss)</td></tr>
+        <tr><td><strong>Memory</strong></td><td>High (each thread builds its own tree)</td><td>Efficient (one shared tree)</td></tr>
+        <tr><td><strong>Speedup (4 cores)</strong></td><td>~3.5x (some wasted work)</td><td>~3.8x (near-linear)</td></tr>
+        <tr><td><strong>Best for</strong></td><td>Prototyping; easy to get right</td><td>Production engines; maximum throughput</td></tr>
+    </table>
+</div>
+
+<h2>4. Rollout Policy Engineering</h2>
+<p>
+    Earlier we said uniform random is "good enough." But when you need to squeeze out more performance, the rollout policy is where you spend your effort:
+</p>
+
+<ul>
+    <li><strong>Heuristic bias:</strong> Weight moves by domain knowledge (e.g., capture checks in Chess, attack weak territories in Risk) rather than choosing uniformly.</li>
+    <li><strong>Cutoff rollouts:</strong> Stop the rollout early and use a heuristic evaluation function. This trades accuracy for speed &mdash; useful when reaching a terminal state takes many moves.</li>
+    <li><strong>MAST (Move-Average Sampling Technique):</strong> Track a global table of "moves that win." During rollouts, pick moves with historically good global win rates.</li>
+</ul>
+
+<div class="code-block">
+<span class="cm"># Heuristic rollout for Checkers:</span>
+<span class="kw">def</span> <span class="fn">heuristic_rollout</span>(state):
+    <span class="kw">while</span> <span class="kw">not</span> state.is_terminal():
+        moves = state.legal_moves()
+
+        <span class="cm"># Prefer captures; otherwise random</span>
+        captures = [m <span class="kw">for</span> m <span class="kw">in</span> moves <span class="kw">if</span> m.is_capture]
+        <span class="kw">if</span> captures:
+            move = <span class="fn">random.choice</span>(captures)
+        <span class="kw">else</span>:
+            <span class="cm"># Weighted random: prefer forward moves slightly</span>
+            weights = [<span class="num">2.0</span> <span class="kw">if</span> m.is_forward <span class="kw">else</span> <span class="num">1.0</span> <span class="kw">for</span> m <span class="kw">in</span> moves]
+            move = <span class="fn">random.choices</span>(moves, weights=weights)[<span class="num">0</span>]
+
+        state.apply(move)
+
+    <span class="kw">return</span> state.reward()
+</div>
+
+<h2>5. The Complete Engine Architecture</h2>
+
+<div class="figure-box">
+    <strong>MCTS Engine Architecture</strong><br><br>
+    <tt>mcts_search()</tt> &rarr; main entry point<br>
+    &nbsp;&nbsp;&#9495; <tt>mcts_iteration()</tt> &rarr; one four-phase cycle<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&#9495; <tt>tree_policy()</tt> &rarr; Selection (UCT descent)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9495; <tt>uct_select_child()</tt> &rarr; UCT formula<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&#9495; <tt>expand()</tt> &rarr; adds one child node<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&#9495; <tt>simulate()</tt> &rarr; rollout<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&#9495; <tt>backpropagate()</tt> &rarr; walk up, update stats<br>
+    &nbsp;&nbsp;&#9495; <tt>best_move()</tt> &rarr; pick most-visited child<br>
+    &nbsp;&nbsp;&#9495; <tt>advance_root()</tt> &rarr; tree reuse for next turn<br><br>
+    <span style="color:#6c757d;">All depend on <tt>MCTSNode</tt> and game-specific <tt>State</tt>.</span>
+</div>
+
+<h2>6. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Advanced Tradeoffs</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. After the opponent makes a move, how can you avoid rebuilding the MCTS tree from scratch?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Copy the entire tree to a new root</button>
+      <button class="quiz-btn" data-answer="correct">Reuse the subtree rooted at the opponent's chosen child</button>
+      <button class="quiz-btn" data-answer="wrong">Save the tree to disk and reload it</button>
+    </div>
+    <div class="quiz-feedback">Correct! The subtree below the opponent's move is still valid. Detach it from its parent and make it the new root. This preserves thousands of iterations of analysis.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. What is a transposition table used for?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">Merging nodes that represent the same game state reached via different move sequences</button>
+      <button class="quiz-btn" data-answer="wrong">Storing the best move found so far</button>
+      <button class="quiz-btn" data-answer="wrong">Converting between different game representations</button>
+    </div>
+    <div class="quiz-feedback">Correct! Transpositions are common in Chess and Checkers. Hashing states and merging equivalent nodes saves computation and memory.</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. What is the simplest approach to parallel MCTS?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Tree parallelism with virtual loss</button>
+      <button class="quiz-btn" data-answer="correct">Root parallelism: run independent searches, average results</button>
+      <button class="quiz-btn" data-answer="wrong">GPU acceleration of rollouts</button>
+    </div>
+    <div class="quiz-feedback">Correct! Root parallelism is trivial to implement (no locks, no shared state). It wastes some work (each thread rebuilds the tree) but gives good speedup for minimal code complexity.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What does virtual loss do in tree-parallel MCTS?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Deletes losing branches from the tree</button>
+      <button class="quiz-btn" data-answer="correct">Artificially increments a node's visit count to discourage other threads from choosing it</button>
+      <button class="quiz-btn" data-answer="wrong">Reduces the win count to penalize losing paths</button>
+    </div>
+    <div class="quiz-feedback">Correct! Virtual loss acts as a temporary "lock." A thread increments a node's visits before searching it, making it less attractive to other threads via UCT's exploration term.</div>
+  </div>
+</div>
+
+<h2>7. Summary</h2>
+<ul>
+    <li><strong>Tree reuse</strong> via <tt>advance_root()</tt> is the single biggest performance win &mdash; never rebuild from scratch.</li>
+    <li><strong>Transposition tables</strong> merge equivalent states; essential for Chess/Checkers, unnecessary for Go.</li>
+    <li><strong>Root parallelism</strong> is the simplest way to parallelize: independent searches, averaged results.</li>
+    <li><strong>Tree parallelism</strong> with virtual loss is more advanced but more memory-efficient.</li>
+    <li><strong>Heuristic rollouts</strong> improve per-iteration quality at the cost of per-iteration speed.</li>
+    <li>The engine architecture has a clean separation: generic MCTS core + six-method game-specific <tt>State</tt>.</li>
+</ul>
+
+<p class="cite">
+    <strong>References:</strong> Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG. &bull; Enzenberger, M. et al. (2010). <em>Fuego: An Open-Source Framework for Board Games and Go.</em> IEEE Trans. CIAG. &bull; Childs, B. et al. (2008). <em>On the Effectiveness of Tree Search with Virtual Loss.</em> ICGA Journal.
+</p>
+
+<div class="callout-info">
+    <strong>&#127891; Course complete.</strong> You now have the full framework to design and implement an MCTS-based game engine for games with high branching factors and randomness. Review any lesson, explore the <a href="../reference/glossary.html">glossary</a>, or ask 99 for deeper dives on specific topics.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

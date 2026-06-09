@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCTS & Yahtzee AI: An AI Teaching Experiment</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; margin-bottom: 0.5rem;}
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  p, li { margin-bottom: 0.8rem; }
+  ul { padding-left: 1.5rem; margin-bottom: 1rem; list-style-type: none; }
+  ul.lessons li { margin-bottom: 0.8rem; }
+  ul.lessons a { text-decoration: none; color: #0f3460; font-weight: 600; font-size: 1.05rem; transition: color 0.2s; }
+  ul.lessons a:hover { color: #e94560; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; margin-bottom: 2rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 1rem 1.2rem; margin: 1.5rem 0; font-size: 0.95rem; }
+  .callout strong { color: #856404; display: block; margin-bottom: 0.4rem; }
+  a { color: #e94560; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>MCTS & Yahtzee AI</h1>
+<p class="subtitle">A Journey into Monte Carlo Tree Search, Expectations, and AI Hallucinations</p>
+
+<h2>Introduction & Context</h2>
+<div class="callout">
+    <strong>Disclaimer:</strong>
+    <p>This entire lesson set was generated as an experiment using the <code>/teach</code> skill created by Matt Pocock (<a href="https://www.aihero.dev/learn-anything-with-my-teach-skill" target="_blank">Learn Anything with my /teach skill</a>). I have <strong>not</strong> reviewed the underlying generated information for mathematical or theoretical accuracy. Proceed with a healthy dose of skepticism!</p>
+</div>
+
+<p>
+    This project started as a purely educational exploration of Monte Carlo Tree Search (MCTS) mechanics, but it quickly evolved into a fascinating meta-study on AI behavior and problem-solving. 
+</p>
+<p>
+    Things became particularly interesting once I decided to put the theoretical MCTS concepts to the test by having the AI (Google's AntiGravity) build a Yahtzee-playing engine. Despite the AI's confident explanations and theoretical setup, the engine's actual performance was surprisingly poor—far below what the AI's confident dialogue had prepared me for.
+</p>
+<p>
+    This phenomenon jibes perfectly with my previous experiments trying to use Claude to write an expert-level checkers engine. In both cases, the AI confidently proposes a sophisticated architecture, is genuinely "surprised" when the empirical performance turns out to be mediocre, and then begins recursively suggesting "fixes" and "optimizations" that also fail to move the needle. 
+</p>
+<p>
+    It serves as an incredible reminder of the "curse of dimensionality" in stochastic games, and the disconnect between an LLM's theoretical textbook knowledge and its ability to construct and debug complex, mathematically chaotic environments from scratch. Still, it was a highly entertaining and interesting experiment!
+</p>
+
+<h2>The Lesson Set</h2>
+<ul class="lessons">
+    <li><a href="lessons/0001-uct-selection-formula.html">Lesson 0001: The UCT Selection Formula</a></li>
+    <li><a href="lessons/0002-implementing-selection.html">Lesson 0002: Implementing Selection</a></li>
+    <li><a href="lessons/0003-expansion-and-simulation.html">Lesson 0003: Expansion and Simulation</a></li>
+    <li><a href="lessons/0004-backpropagation-and-full-loop.html">Lesson 0004: Backpropagation and the Full Loop</a></li>
+    <li><a href="lessons/0005-stochastic-games.html">Lesson 0005: Stochastic Games</a></li>
+    <li><a href="lessons/0006-advanced-tradeoffs.html">Lesson 0006: Advanced Tradeoffs</a></li>
+    <li><a href="lessons/0007-yahtzee-implementation.html">Lesson 0007: Yahtzee Implementation (The Initial Attempt)</a></li>
+    <li><a href="lessons/0008-yahtzee-refinements.html">Lesson 0008: Yahtzee Refinements (Discovering the Open-Loop Flaw)</a></li>
+    <li><a href="lessons/0009-expectimax-mcts.html">Lesson 0009: ExpectiMax MCTS (Theory & Solution)</a></li>
+    <li><a href="lessons/0010-expectimax-implementation.html">Lesson 0010: Implementing ExpectiMax (The Final Benchmark)</a></li>
+</ul>
+
+<h2>Source Code</h2>
+<ul class="lessons">
+    <li><a href="yahtzee_mcts.py" target="_blank">yahtzee_mcts.py</a> (Open-Loop MCTS)</li>
+    <li><a href="yahtzee_expectimax_mcts.py" target="_blank">yahtzee_expectimax_mcts.py</a> (Closed-Loop ExpectiMax MCTS)</li>
+    <li><a href="blackjack_mcts.py" target="_blank">blackjack_mcts.py</a> (Blackjack MCTS implementation)</li>
+    <li><a href="blackjack_dp.py" target="_blank">blackjack_dp.py</a> (Blackjack Dynamic Programming solver)</li>
+    <li><a href="blackjack_edge.py" target="_blank">blackjack_edge.py</a> (Blackjack expected value/edge calculator)</li>
+</ul>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0001: The UCT Selection Formula</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #1a1a2e;
+    background: #f8f9fa;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    padding: 2.5rem 2rem;
+  }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 {
+    font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem;
+    color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem;
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .formula-box {
+    background: #f0f4ff;
+    border: 1px solid #d0d9f0;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin: 1.2rem 0;
+    text-align: center;
+    font-size: 1.1rem;
+    overflow-x: auto;
+  }
+  .formula-box mjx-container { font-size: 1.2rem; }
+  .tree-viz { margin: 1.5rem 0; }
+  .tree-row { display: flex; justify-content: center; gap: 1rem; margin: 0.5rem 0; flex-wrap: wrap; }
+  .tree-node {
+    background: #e9ecef; border: 2px solid #ced4da; border-radius: 8px;
+    padding: 0.6rem 0.8rem; min-width: 110px; text-align: center;
+    font-size: 0.85rem; transition: all 0.2s;
+  }
+  .tree-node.selected { background: #d4edda; border-color: #28a745; }
+  .tree-node .label { font-weight: 600; color: #16213e; }
+  .tree-node .stat { color: #6c757d; font-size: 0.8rem; }
+  .tree-node .uct-val { color: #533483; font-weight: 600; font-size: 0.85rem; }
+  .slider-group { margin: 1.5rem 0; background: #f8f9fa; border-radius: 10px; padding: 1.2rem; }
+  .slider-group label { display: block; font-weight: 600; margin-bottom: 0.4rem; }
+  .slider-group input[type="range"] { width: 100%; }
+  .slider-group .value-display { font-size: 1.5rem; font-weight: 700; color: #533483; text-align: center; }
+  .slider-group .hint { font-size: 0.85rem; color: #6c757d; text-align: center; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn {
+    background: #16213e; color: #fff; border: none; border-radius: 6px;
+    padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem;
+    transition: background 0.15s;
+  }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .callout {
+    background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout strong { color: #856404; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  @media (max-width: 600px) {
+    .container { padding: 1.5rem 1rem; }
+    h1 { font-size: 1.4rem; }
+    .tree-node { min-width: 90px; font-size: 0.75rem; padding: 0.4rem 0.5rem; }
+    .formula-box { font-size: 0.9rem; padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0001: The UCT Selection Formula</h1>
+<p class="subtitle">The engine at the heart of MCTS &mdash; how to choose which branch to explore.</p>
+
+<h2>1. Why Selection Is the Brain of MCTS</h2>
+<p>
+  In the MCTS cycle, <strong>Selection</strong> is where the algorithm decides <em>which path</em> to descend. A naive selection &mdash; always picking the move with the highest win rate &mdash; would never discover hidden strengths of unexplored branches. A random selection would be too slow to converge.
+</p>
+<p>
+  The solution is the <strong>UCT</strong> (Upper Confidence Bound applied to Trees) formula. It treats each move from a game state as a <em>multi-armed bandit</em> problem: you have several slot machines (moves), each paying out wins at some unknown rate. UCT tells you which machine to pull next.
+</p>
+
+<h2>2. The Three Functions You Need to Know</h2>
+<p>
+  Before we unpack the formula, let's name every piece. UCT operates on a tree where each <em>node</em> represents a game state, and each <em>edge</em> (parent $&rarr;$ child) represents taking an action $a$ from state $s$.
+</p>
+<table style="width:100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem;">
+  <tr style="background:#16213e; color:#fff;">
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Symbol</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Name</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">What It Means</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$N(s)$</td>
+    <td style="padding: 0.4rem 0.5rem;">Parent visit count</td>
+    <td style="padding: 0.4rem 0.5rem;">Total times the <em>parent</em> state $s$ has been visited across all MCTS iterations so far.</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$n(s,a)$</td>
+    <td style="padding: 0.4rem 0.5rem;">Child visit count</td>
+    <td style="padding: 0.4rem 0.5rem;">Number of times this specific move $a$ was chosen from state $s$. Starts at 0, increments each time Selection descends into it.</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$w(s,a)$</td>
+    <td style="padding: 0.4rem 0.5rem;">Total reward</td>
+    <td style="padding: 0.4rem 0.5rem;">Sum of all rewards (e.g., wins $=1$, losses $=0$) obtained from simulations that passed through this child. $w(s,a)\,/\,n(s,a)$ is the empirical win rate.</td>
+  </tr>
+  <tr>
+    <td style="padding: 0.4rem 0.5rem;">$C_p$</td>
+    <td style="padding: 0.4rem 0.5rem;">Exploration constant</td>
+    <td style="padding: 0.4rem 0.5rem;">A tunable parameter (default $\approx \sqrt{2}$) that controls how much weight to give exploration vs. exploitation.</td>
+  </tr>
+</table>
+<p>
+  So the UCT formula takes these four values and combines them into a single score. The child with the highest UCT score gets selected.
+</p>
+
+<h2>3. The UCT Formula (Anatomy)</h2>
+<div class="formula-box" id="formula-box">
+  $\displaystyle \text{UCT}(s,a) = \underbrace{\frac{w(s,a)}{n(s,a)}}_{\text{exploitation}} \;+\; \underbrace{C_p \sqrt{\frac{\ln N(s)}{n(s,a)}}}_{\text{exploration}}$
+</div>
+<table style="width:100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem;">
+  <tr style="border-bottom: 1px solid #dee2e6;">
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Term</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Meaning</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Role</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem; color: #e94560;">$w(s,a) / n(s,a)$</td>
+    <td style="padding: 0.4rem 0.5rem;">Win rate of action $a$ from state $s$</td>
+    <td style="padding: 0.4rem 0.5rem;"><span style="color:#e94560;">Exploitation</span> &mdash; favour moves known to win</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem; color: #0f3460;">$C_p \sqrt{ \ln N(s) / n(s,a) }$</td>
+    <td style="padding: 0.4rem 0.5rem;">Uncertainty bonus &mdash; shrinks as we visit $a$ more</td>
+    <td style="padding: 0.4rem 0.5rem;"><span style="color:#0f3460;">Exploration</span> &mdash; favour moves tried fewer times</td>
+  </tr>
+  <tr>
+    <td style="padding: 0.4rem 0.5rem; color: #533483;">$C_p$</td>
+    <td style="padding: 0.4rem 0.5rem;">Exploration constant (tunable, default $\approx \sqrt{2}$)</td>
+    <td style="padding: 0.4rem 0.5rem;"><span style="color:#533483;">Balance</span> &mdash; how much weight to give exploration</td>
+  </tr>
+</table>
+<p>
+  <strong>When $n(s,a) = 0$</strong> (the move has never been tried), the formula returns $+\infty$ &mdash; it <em>always</em> selects an unvisited child. This ensures every legal move is sampled at least once before exploitation dominates.
+</p>
+<div class="callout">
+  <strong>&#128161; Key Insight:</strong> The exploration term $\sqrt{\ln N(s) / n(s,a)}$ uses the <em>parent's</em> total visits $N(s)$ in the numerator, not the child's. This means a move that looks average but has been visited far fewer times than its siblings gets a large exploration bonus.
+</div>
+
+<h2>4. Interactive Demo: Tuning $C_p$</h2>
+<p>
+  Below is a root node with four possible moves (A&ndash;D). Each has been visited a different number of times with different win rates. Adjust the <strong>$C_p$</strong> slider to see which move UCT selects.
+</p>
+<div class="slider-group">
+  <label for="cp-slider">Exploration Constant $C_p$</label>
+  <input type="range" id="cp-slider" min="0" max="5" step="0.1" value="1.41">
+  <div class="value-display" id="cp-value">$C_p = 1.41$</div>
+  <div class="hint">Low ($&lt;0.5$) = exploit aggressively &nbsp;|&nbsp; High ($&gt;3$) = explore aggressively</div>
+</div>
+<div class="tree-viz" id="tree-viz">
+  <div class="tree-row">
+    <div class="tree-node root-node">
+      <div class="label">Root $N=165$</div>
+    </div>
+  </div>
+  <div class="tree-row" id="children-row">
+    <div class="tree-node child-node" id="child-A" data-wins="80" data-visits="100">
+      <div class="label">Move A</div>
+      <div class="stat">$w=80,\; n=100$ (80%)</div>
+      <div class="uct-val">UCT: &mdash;</div>
+    </div>
+    <div class="tree-node child-node" id="child-B" data-wins="27" data-visits="40">
+      <div class="label">Move B</div>
+      <div class="stat">$w=27,\; n=40$ (67.5%)</div>
+      <div class="uct-val">UCT: &mdash;</div>
+    </div>
+    <div class="tree-node child-node" id="child-C" data-wins="12" data-visits="20">
+      <div class="label">Move C</div>
+      <div class="stat">$w=12,\; n=20$ (60%)</div>
+      <div class="uct-val">UCT: &mdash;</div>
+    </div>
+    <div class="tree-node child-node" id="child-D" data-wins="2" data-visits="5">
+      <div class="label">Move D</div>
+      <div class="stat">$w=2,\; n=5$ (40%)</div>
+      <div class="uct-val">UCT: &mdash;</div>
+    </div>
+  </div>
+</div>
+<div class="callout">
+  <strong>Try it:</strong> Set $C_p = 0$. Move A (80% win rate) is selected &mdash; pure exploitation. Now set $C_p = 5.0$. Move D (only 5 visits, 40% win rate) gets the highest UCT score because its uncertainty bonus dwarfs the exploitation term. The algorithm chooses to explore the unknown rather than exploit the known.
+</div>
+
+<h2>5. Worked Example (By Hand)</h2>
+<p>Suppose we're at a root with $N(s) = 100$ total visits, comparing two child moves:</p>
+<ul>
+  <li><strong>Move X:</strong> $n=20,\; w=15$ (75% win rate)</li>
+  <li><strong>Move Y:</strong> $n=5,\; w=3$ (60% win rate)</li>
+</ul>
+<p>With $C_p = 1.41\;(\approx\sqrt{2})$:</p>
+<table style="width:100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.9rem;">
+  <tr style="background:#f0f4ff; border-bottom: 1px solid #d0d9f0;">
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Move</th>
+    <th style="text-align:center; padding: 0.4rem 0.5rem;">Exploitation $w/n$</th>
+    <th style="text-align:center; padding: 0.4rem 0.5rem;">Exploration $C_p\sqrt{\ln N / n}$</th>
+    <th style="text-align:center; padding: 0.4rem 0.5rem;">UCT</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">X</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; color:#e94560;">$15/20 = 0.750$</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; color:#0f3460;">$1.41 \times \sqrt{\ln 100 / 20} = 0.484$</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; font-weight:700;">$1.234$</td>
+  </tr>
+  <tr>
+    <td style="padding: 0.4rem 0.5rem;">Y</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; color:#e94560;">$3/5 = 0.600$</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; color:#0f3460;">$1.41 \times \sqrt{\ln 100 / 5} = 0.968$</td>
+    <td style="text-align:center; padding: 0.4rem 0.5rem; font-weight:700;">$1.568$</td>
+  </tr>
+</table>
+<p><strong>Result:</strong> Move Y is selected even though its win rate is lower. Why? Because it has been visited only 5 times vs. 20 for X &mdash; the algorithm is uncertain about Y and wants to gather more data.</p>
+<div class="callout">
+  <strong>&#129504; Why this matters for engine design:</strong> In high-branching games like Risk (where a single territory can be attacked from multiple fronts), this behaviour lets the engine try new attack patterns early &mdash; even if they look weak &mdash; while quickly converging on the statistically strongest lines.
+</div>
+
+<h2>6. Tuning $C_p$ for Your Game</h2>
+<table style="width:100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.9rem;">
+  <tr style="background:#16213e; color:#fff;">
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">$C_p$ Value</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Behaviour</th>
+    <th style="text-align:left; padding: 0.4rem 0.5rem;">Best For</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$0$</td>
+    <td style="padding: 0.4rem 0.5rem;">Pure exploitation (greedy)</td>
+    <td style="padding: 0.4rem 0.5rem;">Late game with few moves left; known-optimal endgames</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$0.5$ &ndash; $1.0$</td>
+    <td style="padding: 0.4rem 0.5rem;">Light exploration</td>
+    <td style="padding: 0.4rem 0.5rem;">Deterministic games with simple rules (Tic-Tac-Toe)</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$1.414\;(\sqrt{2})$</td>
+    <td style="padding: 0.4rem 0.5rem;">"Goldilocks" default</td>
+    <td style="padding: 0.4rem 0.5rem;">Most board games; proven optimal for bandit problems</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #eee;">
+    <td style="padding: 0.4rem 0.5rem;">$2.0$ &ndash; $3.0$</td>
+    <td style="padding: 0.4rem 0.5rem;">Heavy exploration</td>
+    <td style="padding: 0.4rem 0.5rem;">Stochastic games (dice/randomness) where the same move can have varying outcomes</td>
+  </tr>
+  <tr>
+    <td style="padding: 0.4rem 0.5rem;">$&gt; 3.0$</td>
+    <td style="padding: 0.4rem 0.5rem;">Near-random selection</td>
+    <td style="padding: 0.4rem 0.5rem;">Early in training; discovering initial strategies</td>
+  </tr>
+</table>
+
+<h2>7. Check Your Understanding</h2>
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: UCT Fundamentals</h3>
+  <div class="quiz-question" data-q="1">
+    <p>1. If a child node has $n(s,a) = 0$ (never visited), what UCT value does it receive?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">$+\infty$ (infinity)</button>
+      <button class="quiz-btn" data-answer="wrong">$0$</button>
+      <button class="quiz-btn" data-answer="wrong">$1$</button>
+    </div>
+    <div class="quiz-feedback">Correct! An unvisited child always gets priority &mdash; $w/n$ diverges to $+\infty$, guaranteeing every legal move is sampled at least once.</div>
+  </div>
+  <div class="quiz-question" data-q="2">
+    <p>2. What happens to the exploration term $\sqrt{\ln N(s) / n(s,a)}$ as $n(s,a)$ increases?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">It increases</button>
+      <button class="quiz-btn" data-answer="correct">It decreases</button>
+      <button class="quiz-btn" data-answer="wrong">It stays the same</button>
+    </div>
+    <div class="quiz-feedback">Correct! As we visit a child more times, the uncertainty about its true win rate shrinks, so the exploration bonus diminishes. The algorithm shifts from exploration to exploitation.</div>
+  </div>
+  <div class="quiz-question" data-q="3">
+    <p>3. You're designing an engine for Risk (dice-based combat). Should $C_p$ be higher or lower than the default $\sqrt{2}$?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Lower</button>
+      <button class="quiz-btn" data-answer="correct">Higher</button>
+      <button class="quiz-btn" data-answer="wrong">Same</button>
+    </div>
+    <div class="quiz-feedback">Correct! Risk has randomness (dice rolls), so the same move can produce different outcomes. More exploration (higher $C_p$) helps the engine gather enough samples to see past the noise.</div>
+  </div>
+</div>
+
+<h2>8. Summary</h2>
+<ul>
+  <li>$\displaystyle \text{UCT} = \underbrace{\frac{w}{n}}_{\text{exploitation}} \;+\; C_p \underbrace{\sqrt{\frac{\ln N}{n}}}_{\text{exploration}}$</li>
+  <li>Unvisited children are always selected first (infinite UCT).</li>
+  <li>Higher $C_p$ = more exploration; lower = more exploitation.</li>
+  <li>Stochastic games (dice, cards) benefit from higher $C_p$.</li>
+  <li>Selection is called repeatedly as the first phase of <em>every</em> MCTS iteration.</li>
+</ul>
+<p class="cite">
+  <strong>References:</strong> Kocsis, L. &amp; Szepesv&aacute;ri, C. (2006). <em>Bandit Based Monte-Carlo Planning.</em> ECML 2006.
+  &bull; Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG.
+  &bull; See the <a href="../reference/glossary.html">glossary</a> for full term definitions.
+</p>
+<div class="callout">
+  <strong>&#128172; Questions?</strong> This is just Lesson 0001 &mdash; the foundation. If anything is unclear, ask 99 (your teacher) to clarify, walk through more examples, or adjust the pace. The next lesson (0002) will cover <strong>implementing Selection in code</strong>.
+</div>
+
+</div>
+
+<script>
+  (function() {
+    var cpSlider = document.getElementById('cp-slider');
+    var cpValue  = document.getElementById('cp-value');
+    var children = document.querySelectorAll('.child-node');
+    var N = 165;
+
+    function updateTree() {
+      var Cp = parseFloat(cpSlider.value);
+      cpValue.innerHTML = '$C_p = ' + Cp.toFixed(1) + '$';
+      if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise([cpValue]);
+      }
+
+      var maxUCT = -Infinity;
+      var bestChild = null;
+
+      children.forEach(function(el) {
+        var w = parseFloat(el.dataset.wins);
+        var n = parseFloat(el.dataset.visits);
+        var exploitation = w / n;
+        var exploration = Cp * Math.sqrt(Math.log(N) / n);
+        var uct = exploitation + exploration;
+        el.querySelector('.uct-val').textContent = 'UCT: ' + uct.toFixed(3);
+        if (uct > maxUCT) { maxUCT = uct; bestChild = el; }
+      });
+
+      children.forEach(function(el) { el.classList.remove('selected'); });
+      if (bestChild) bestChild.classList.add('selected');
+    }
+
+    cpSlider.addEventListener('input', updateTree);
+    updateTree();
+
+    document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var question = this.closest('.quiz-question');
+        var feedback = question.querySelector('.quiz-feedback');
+        var isCorrect = this.dataset.answer === 'correct';
+
+        question.querySelectorAll('.quiz-btn').forEach(function(b) {
+          b.disabled = true;
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+          else if (this === b) b.classList.add('wrong');
+        });
+
+        feedback.classList.add('show');
+        feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+      });
+    });
+  })();
+</script>
+</body>
+</html>

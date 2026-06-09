@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0003: Expansion and Simulation</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #1a1a2e;
+    background: #f8f9fa;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    padding: 2.5rem 2rem;
+  }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 {
+    font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem;
+    color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem;
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout {
+    background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout strong { color: #856404; }
+  .callout-info {
+    background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout-info strong { color: #0c5460; }
+  .callout-design {
+    background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px;
+    padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+  }
+  .callout-design strong { color: #1d6f42; }
+  .code-block {
+    background: #1e1e2e; color: #cdd6f4; border-radius: 10px;
+    padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    overflow-x: auto; line-height: 1.5; white-space: pre;
+  }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn {
+    background: #16213e; color: #fff; border: none; border-radius: 6px;
+    padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem;
+    transition: background 0.15s;
+  }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  .figure-box {
+    background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px;
+    padding: 1.2rem; margin: 1rem 0; text-align: center; font-size: 0.9rem;
+  }
+  @media (max-width: 600px) {
+    .container { padding: 1.5rem 1rem; }
+    h1 { font-size: 1.4rem; }
+    .code-block { font-size: 0.75rem; padding: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0003: Expansion and Simulation</h1>
+<p class="subtitle">Adding nodes to the tree and running rollouts &mdash; phases 2 and 3 of the MCTS cycle.</p>
+
+<h2>1. The Flow After Selection</h2>
+<p>
+    Recall from Lesson 0002 that <tt>tree_policy</tt> returns a node at the frontier &mdash; either a node that <em>isn't fully expanded</em> (has untried moves) or a <em>terminal</em> node. What happens next depends on which case we're in:
+</p>
+
+<div class="figure-box">
+    <strong>tree_policy result</strong><br>
+    &#9507;&#9472; Not fully expanded &rarr; <strong>Expansion:</strong> add one new child node<br>
+    &#9499;&#9472; Terminal &rarr; <strong>Skip Expansion</strong> (no moves to make)
+</div>
+
+<div class="code-block">
+<span class="cm"># Inside mcts_iteration (from Lesson 0002):</span>
+node = <span class="fn">tree_policy</span>(root, Cp)   <span class="cm"># Selection phase</span>
+
+<span class="kw">if</span> <span class="kw">not</span> node.is_terminal:
+    node = <span class="fn">expand</span>(node)           <span class="cm"># Expansion phase (NEW)</span>
+
+reward = <span class="fn">simulate</span>(node)          <span class="cm"># Simulation phase (NEW)</span>
+</div>
+
+<h2>2. Expansion: Growing the Tree</h2>
+
+<p>
+    <strong>Expansion</strong> is deceptively simple: take one untried move from the current node, apply it to produce a new game state, wrap that state in a new <tt>MCTSNode</tt>, link it as a child, and return it.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">expand</span>(node):
+    <span class="cm">"""Pick one untried move, create a child node, and return it."""</span>
+    <span class="cm"># Pop one untried move (order matters &mdash; first legal move, first tried)</span>
+    move = node.untried_moves.<span class="fn">pop</span>()
+
+    <span class="cm"># Apply the move to get a new state</span>
+    new_state = node.state.<span class="fn">apply</span>(move)
+
+    <span class="cm"># Create the child node, link it to parent</span>
+    child = <span class="cls">MCTSNode</span>(new_state, parent=node)
+    node.children.<span class="fn">append</span>(child)
+
+    <span class="kw">return</span> child
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Design choice: one child per call.</strong> We expand exactly <em>one</em> child per iteration, not all of them. This is the standard approach &mdash; it keeps each MCTS iteration cheap and lets UCT guide which branches get deepened first. Over many iterations, all moves eventually get expanded.
+</div>
+
+<p>
+    The <tt>state.apply(move)</tt> method is game-specific. In Chess it would make a move on the board. In Risk it would resolve a combat and advance the game state. For <strong>stochastic games</strong> (games with random elements), <tt>apply</tt> must also handle chance events &mdash; more on this in a future lesson.
+</p>
+
+<h2>3. Simulation / Rollout: The Monte Carlo Step</h2>
+
+<p>
+    <strong>Simulation</strong> (also called <strong>rollout</strong>) is where the "Monte Carlo" name comes from. From the node returned by Expansion (or directly from Selection if the node was terminal), we play a <em>full game</em> to completion using a fast, simple policy &mdash; typically random moves. The result is a single reward signal: $+1$ for a win, $0$ for a loss, $+0.5$ for a draw.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">simulate</span>(node):
+    <span class="cm">"""Run a random rollout from this node's state to a terminal.</span>
+<span class="cm">       Returns the reward from the perspective of the player who</span>
+<span class="cm">       made the move that led to this node."""</span>
+    state = node.state.<span class="fn">clone</span>()      <span class="cm"># don't mutate the tree's state</span>
+
+    <span class="kw">while</span> <span class="kw">not</span> state.<span class="fn">is_terminal</span>():
+        move = <span class="fn">random_choice</span>(state.<span class="fn">legal_moves</span>())
+        state.<span class="fn">apply</span>(move)
+
+    <span class="kw">return</span> state.<span class="fn">reward</span>()          <span class="cm"># +1, 0, or 0.5 from current player's perspective</span>
+</div>
+
+<h3>3.1 Why Random Works</h3>
+<p>
+    Intuitively, random play seems useless &mdash; how can a random game tell us anything about a good move? The key insight is that we're not relying on <em>one</em> simulation but on <em>the aggregate of many</em>. If move A leads to a win in 65% of random rollouts and move B wins only 35%, then A is genuinely the better move &mdash; even though each individual rollout was random chaos.
+</p>
+
+<div class="callout-design">
+    <strong>&#129504; Tradeoff: Rollout Policy Quality vs. Speed</strong><br><br>
+    <table>
+        <tr><th>Rollout Policy</th><th>Quality per Rollout</th><th>Rollouts per Second</th><th>Best For</th></tr>
+        <tr><td>Uniform random</td><td>Low (noisy)</td><td>Very high</td><td>Games with shallow trees; prototyping</td></tr>
+        <tr><td>Heuristic-guided</td><td>Medium (biased)</td><td>Medium</td><td>Games with good heuristic rules (e.g., capture pieces in Chess)</td></tr>
+        <tr><td>Light playouts</td><td>High (domain-aware)</td><td>Low</td><td>Fine-tuning a near-complete engine</td></tr>
+    </table>
+    <br>
+    The surprising result from the literature: uniform random is often <em>good enough</em> for MCTS to outperform hand-crafted AIs, because the statistical aggregation across thousands of rollouts washes out the noise. This is what made the original MCTS (before neural nets) so powerful.
+</div>
+
+<h3>3.2 Cloning vs. Applying</h3>
+<p>
+    Notice that <tt>simulate</tt> calls <tt>state.clone()</tt> before making moves. This is critical: the rollout mutates the state (applying random moves), but we must not mutate the state stored inside our <tt>MCTSNode</tt> tree. The clone creates an independent copy for the rollout.
+</p>
+
+<div class="callout">
+    <strong>&#9888;&#65039; Watch out!</strong> If your game state is expensive to clone (e.g., a large board with many pieces), consider a <em>copy-on-write</em> or <em>undo</em> pattern: apply a move for the rollout, then undo it. This avoids cloning overhead at the cost of more careful code.
+</div>
+
+<h2>4. Whose Perspective Is the Reward From?</h2>
+<p>
+    A subtle but critical question: when we win a simulation, who gets credit? The reward must be from the perspective of the <strong>player who made the move</strong> that led to the current node, not from the perspective of the simulator.
+</p>
+
+<p>
+    For a two-player zero-sum game (Chess, Go), a win for the current player is $+1$ for them and $0$ for the opponent. During Backpropagation, we alternate the reward sign as we move up the tree &mdash; because what's good for the current player is bad for the parent. We'll cover this in Lesson 0004.
+</p>
+
+<p>
+    But there's another approach that simplifies things enormously: <strong>no-perspective rewards</strong>, where you always backpropagate the raw result. This works because the sign flip happens at each level of the tree naturally &mdash; you just negate the reward on each step up. We'll see the code for both approaches in Lesson 0004.
+</p>
+
+<h2>5. Expansion + Simulation Worked Example</h2>
+<p>
+    Let's trace through one iteration on a hypothetical game tree:
+</p>
+
+<div class="figure-box">
+    <strong>Before iteration:</strong> Root (N=50) has children A (n=20, w=15), B (n=30, w=12).<br>
+    UCT selects A (exploitation 0.75 + exploration ...). A has <em>one untried move</em> remaining.
+</div>
+
+<div class="code-block">
+<span class="cm">// 1. tree_policy descends to A (not fully expanded, stops)</span>
+<span class="cm">// 2. expand(A): pops the last untried move, applies it -&gt; new child C</span>
+A.children <span class="op">=</span> [old_child1, old_child2, <span class="cls">C</span>]
+A.untried_moves <span class="op">=</span> []
+
+<span class="cm">// 3. simulate(C): random rollout from C's state</span>
+<span class="cm">//    Result: win for C's player -&gt; reward = +1</span>
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Note:</strong> After expansion, we simulate from the <em>new child</em> C, not from A. This is the standard pattern &mdash; the rollout starts from the state we just expanded to.
+</div>
+
+<h2>6. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Expansion and Simulation</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. How many children does <tt>expand()</tt> create per call?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">All untried moves at once</button>
+      <button class="quiz-btn" data-answer="correct">Exactly one</button>
+      <button class="quiz-btn" data-answer="wrong">It depends on the game</button>
+    </div>
+    <div class="quiz-feedback">Correct! Standard MCTS expands exactly one child per iteration. This keeps iterations cheap and lets UCT control which branches are deepened.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. Why does <tt>simulate()</tt> clone the state before running?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">To avoid mutating the state stored inside the tree</button>
+      <button class="quiz-btn" data-answer="wrong">To make the rollout faster</button>
+      <button class="quiz-btn" data-answer="wrong">To ensure the rollout is deterministic</button>
+    </div>
+    <div class="quiz-feedback">Correct! The rollout mutates the game state (applying random moves). If we didn't clone, we'd corrupt the node's state, breaking the tree for all future iterations.</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. A rollout using uniform random moves wins 55% of the time for move X. Is X likely the best move?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">No, random play is meaningless</button>
+      <button class="quiz-btn" data-answer="correct">Probably yes, if the sample size is large enough</button>
+      <button class="quiz-btn" data-answer="wrong">Only if the opponent also plays randomly</button>
+    </div>
+    <div class="quiz-feedback">Correct! The aggregate of many random rollouts provides a useful signal. If move X wins 55% vs. the alternatives at 40%, it's genuinely stronger &mdash; the statistical noise washes out with enough samples.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What happens after <tt>tree_policy</tt> returns a terminal node?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">The iteration stops and starts over</button>
+      <button class="quiz-btn" data-answer="correct">Expansion is skipped, simulation returns the known result</button>
+      <button class="quiz-btn" data-answer="wrong">The terminal node is expanded with a "pass" move</button>
+    </div>
+    <div class="quiz-feedback">Correct! No moves to expand from a terminal state. The simulation just returns the known terminal reward &mdash; no random rollout needed.</div>
+  </div>
+</div>
+
+<h2>7. Summary</h2>
+<ul>
+    <li><strong>Expansion</strong> pops one untried move, applies it to create a new <tt>MCTSNode</tt>, and links it as a child.</li>
+    <li><strong>Simulation</strong> clones the state, runs random moves to a terminal, and returns a reward ($+1$, $0$, $+0.5$).</li>
+    <li>Random rollouts work because aggregation across thousands of samples beats the noise.</li>
+    <li>The reward must be from the perspective of the player who made the move to this node.</li>
+    <li>Cloning (or undo) is essential to avoid corrupting tree state.</li>
+</ul>
+
+<p class="cite">
+    <strong>References:</strong> Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG. &bull; Gelly, S. &amp; Silver, D. (2007). <em>Combining online and offline knowledge in UCT.</em> ICML 2007.
+</p>
+
+<div class="callout-info">
+    <strong>&#128172; Up next:</strong> Lesson 0004 &mdash; <strong>Backpropagation and the Full Loop</strong>. This completes the four-phase cycle and you'll have a complete, working MCTS engine blueprint.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

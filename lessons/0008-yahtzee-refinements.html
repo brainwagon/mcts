@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0008: Yahtzee MCTS Refinements & Expert Play</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout strong { color: #856404; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info strong { color: #0c5460; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design strong { color: #1d6f42; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; overflow-x: auto; line-height: 1.5; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0008: Yahtzee MCTS Refinements & Expert Play</h1>
+<p class="subtitle">Overcoming the pitfalls of Open-Loop MCTS in stochastic games through action space stabilization and heuristic upgrades.</p>
+
+<h2>1. The "Moderate Player" Plateau</h2>
+<p>
+    In Lesson 0007, our MCTS Yahtzee engine successfully played full games but plateaued around a moderate score (averaging ~160 points). Expert Yahtzee play requires averaging well over 240 points. Upon analyzing the initial implementation, three major structural flaws were preventing the MCTS from achieving expert play:
+</p>
+<ol>
+    <li><strong>Open-Loop Instability with Sorted Dice:</strong> The state representation sorted the dice array, and the <code>KEEP</code> action used an integer bitmask based on array indices.</li>
+    <li><strong>A Destructive Rollout Heuristic:</strong> The <code>simulate()</code> function actively destroyed partial straights and ignored the critical Upper Section bonus.</li>
+    <li><strong>A Logic Bug in Rules:</strong> It awarded a 100-point Yahtzee Joker bonus even if the Yahtzee category had been scratched (scored as a 0).</li>
+</ol>
+
+<h2>2. Fixing Action Instability (Semantic Robustness)</h2>
+<p>
+    The most subtle and dangerous flaw was the combination of <strong>Open-Loop MCTS</strong> and <strong>Index-based Actions on Sorted Dice</strong>.
+</p>
+<p>
+    In an Open-Loop MCTS, the tree branches on actions (not states). A deep path in the tree represents an action sequence like: <em>Roll &rarr; KEEP(mask 0b0001) &rarr; SCORE(Fives)</em>. Because dice rolls are stochastic, the actual dice values change wildly on every simulation traverse. If the <code>KEEP</code> mask targets "index 0", and the dice are always sorted, index 0 simply means "keep the lowest die." 
+</p>
+<p>
+    In one simulation, keeping the lowest die might mean keeping a 1. In another, it might mean keeping a 4. The <strong>semantic meaning</strong> of the action fluctuates randomly, rendering the MCTS statistics useless.
+</p>
+<div class="callout-design">
+    <strong>The Fix:</strong> We changed the action space from an index-based bitmask to a <strong>value-based tuple</strong>.
+</div>
+<p>
+    Instead of `KEEP(mask)`, the action became `KEEP( (5, 5) )` (meaning: "Keep two 5s"). By representing actions via their intended values, the action retains its semantic meaning regardless of the random dice rolled in the open-loop traversal.
+</p>
+<div class="code-block">def apply(self, move: Tuple[str, Any]) -> YahtzeeState:
+    kind, arg = move
+    if kind == 'KEEP':
+        # arg is a tuple of values to keep, e.g., (5, 5)
+        pool = list(self.dice)
+        new_dice = []
+        for val in arg:
+            if val in pool:
+                new_dice.append(val)
+                pool.remove(val)
+        # If the open-loop simulation generated dice without 5s, 
+        # it just ignores it and re-rolls everything!
+        while len(new_dice) < 5:
+            new_dice.append(random.randint(1, 6))
+        return YahtzeeState(tuple(sorted(new_dice)), ...)</div>
+
+<h2>3. Upgrading the Rollout Heuristic</h2>
+<p>
+    The rollout heuristic (the `simulate` function) provides the terminal value for an unexpanded node. If the heuristic is terrible, the MCTS is fed garbage data and will often perform <em>worse</em> than the heuristic itself.
+</p>
+<p>
+    The original heuristic kept the "most common" die. This meant if it rolled <code>[2, 3, 4, 5, 5]</code>, it would keep the pair of 5s and destroy the Small Straight! Furthermore, it ignored the 35-point Upper Section bonus.
+</p>
+<p>
+    We completely replaced it with a smarter, human-like ruleset:
+</p>
+<ul>
+    <li><strong>Protect Straights:</strong> If the Straight categories are open, scan the dice for 3-die or 4-die consecutive sequences. Prioritize keeping those over pairs.</li>
+    <li><strong>Secure the Upper Bonus:</strong> If you roll 3-of-a-kind (e.g., three 6s), immediately score them in the corresponding upper section (Sixes) to lock in the 35-point bonus trajectory.</li>
+    <li><strong>Smart Sacrifices:</strong> If forced to score 0 points, sacrifice categories in a specific order (Yahtzee &rarr; 1s &rarr; 2s &rarr; 3s), rather than arbitrarily burning a highly valuable category like Chance.</li>
+</ul>
+<div class="callout-info">
+    <strong>Impact:</strong> The pure heuristic average (without MCTS) jumped from ~179 points to ~191 points. By giving the MCTS stable, reliable terminal rewards, the MCTS baseline skyrocketed.
+</div>
+
+<h2>4. Correcting the Rules Engine</h2>
+<p>
+    Finally, a minor bug awarded the Yahtzee joker bonus incorrectly. Standard Yahtzee rules state you only get the 100-point bonus if your Yahtzee box was scored as 50. If you scored it as 0 ("scratched"), you forfeit all future Yahtzee bonuses. We simply changed <code>self.scores[11] >= 0</code> to <code>self.scores[11] > 0</code>.
+</p>
+
+<h2>Summary</h2>
+<p>
+    By stabilizing the stochastic action space and providing a highly intelligent rollout policy, the Yahtzee MCTS overcomes the standard pitfalls of Open-Loop architectures. While true expert-level play in highly stochastic games often requires transitioning to <em>Closed-Loop</em> (ExpectiMax) MCTS to handle chance nodes perfectly, these refinements drastically bridge the gap.
+</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCTS Glossary</title>
+<style>
+  @media print { body { font-size: 10pt; } a { text-decoration: none; color: inherit; } }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; line-height: 1.5; color: #1a1a2e; }
+  h1 { border-bottom: 3px solid #e94560; padding-bottom: 0.3em; }
+  h2 { margin-top: 2em; color: #16213e; }
+  dt { font-weight: 600; margin-top: 1.2em; font-size: 1.05em; }
+  dd { margin-left: 1.5em; margin-top: 0.3em; }
+  .tag { display: inline-block; background: #e94560; color: #fff; border-radius: 3px; padding: 0.1em 0.5em; font-size: 0.75em; font-weight: 600; text-transform: uppercase; margin-right: 0.5em; }
+  .tag-concept { background: #0f3460; }
+  .tag-formula { background: #533483; }
+  .tag-algorithm { background: #16213e; }
+  .tag-tradeoff { background: #e94560; }
+</style>
+</head>
+<body>
+<h1>MCTS Game Engine — Glossary</h1>
+<p><em>Definitive reference for all technical terms used in lessons.</em></p>
+
+<h2>Core Algorithm Concepts <span class="tag tag-algorithm">Algorithm</span></h2>
+<dl>
+  <dt>Monte Carlo Tree Search (MCTS)</dt>
+  <dd>An anytime, best-first search algorithm that builds a partial game tree by repeatedly running four phases (Selection &rarr; Expansion &rarr; Simulation &rarr; Backpropagation). Uses random sampling to estimate move values rather than exhaustive search.</dd>
+
+  <dt>Selection</dt>
+  <dd>Phase 1 of the MCTS cycle. Starting at the root, the algorithm descends through the tree choosing children via a selection policy (typically UCT) until it reaches a node that hasn't been fully explored.</dd>
+
+  <dt>Expansion</dt>
+  <dd>Phase 2. Adds one or more new child nodes to the tree at the frontier reached during Selection.</dd>
+
+  <dt>Simulation (Rollout)</dt>
+  <dd>Phase 3. From the newly expanded node, play a rapid, randomized game to a terminal state to obtain a reward (win/loss/draw). This is the &ldquo;Monte Carlo&rdquo; sampling step.</dd>
+
+  <dt>Backpropagation</dt>
+  <dd>Phase 4. Propagate the simulation result back up through all nodes visited during Selection, updating their visit counts and accumulated rewards.</dd>
+</dl>
+
+<h2>Selection Policy <span class="tag tag-formula">Formula</span></h2>
+<dl>
+  <dt>UCT (Upper Confidence Bound applied to Trees)</dt>
+  <dd>The standard node-selection formula: balances exploitation (choosing nodes with high average reward) with exploration (choosing nodes visited few times).</dd>
+
+  <dt>Exploitation</dt>
+  <dd>Preference for moves known to have high historical win rates. Pulls selection toward the best-known branch.</dd>
+
+  <dt>Exploration</dt>
+  <dd>Preference for less-visited moves. Helps discover unexpectedly strong branches that haven't been sampled enough.</dd>
+
+  <dt>C<sub>p</sub> (Exploration Constant)</dt>
+  <dd>A tunable parameter in the UCT formula that controls the balance between exploration and exploitation. Higher values favor exploration. Often set to ~1.414 (&radic;2) as a default per the original paper.</dd>
+</dl>
+
+<h2>Node Statistics <span class="tag tag-concept">Concept</span></h2>
+<dl>
+  <dt>Visit Count (n(s))</dt>
+  <dd>How many times a particular game state (node) has been selected during the MCTS process.</dd>
+
+  <dt>Win Rate (w(s)/n(s))</dt>
+  <dd>The proportion of simulations starting from state s that resulted in a win for the current player.</dd>
+
+  <dt>Total Reward (w(s))</dt>
+  <dd>Sum of rewards accumulated from simulations passing through this node.</dd>
+</dl>
+
+<h2>Game-Engine Concepts <span class="tag tag-concept">Concept</span></h2>
+<dl>
+  <dt>Branching Factor</dt>
+  <dd>The number of legal moves available at a given game state. High branching factor (e.g., ~35 in Chess, ~130 in Go) is what makes exhaustive search infeasible.</dd>
+
+  <dt>Stochastic Game</dt>
+  <dd>A game that includes random elements (dice rolls, shuffled decks, etc.). MCTS handles these by modelling chance nodes as additional layers in the tree.</dd>
+
+  <dt>Chance Node</dt>
+  <dd>A tree node representing a random event (e.g., a die roll). Instead of a player decision, it branches to all possible outcomes with their probabilities.</dd>
+
+  <dt>Determinization</dt>
+  <dd>A technique for handling hidden information or randomness: repeatedly fix the unknown/random elements to particular values, solve the resulting deterministic game, and aggregate across many determinizations.</dd>
+
+  <dt>Anytime Algorithm</dt>
+  <dd>An algorithm that can return a reasonable answer at any point and improves its answer given more computation time. MCTS is a classic anytime algorithm.</dd>
+</dl>
+
+<h2>Tradeoffs <span class="tag tag-tradeoff">Tradeoff</span></h2>
+<dl>
+  <dt>Depth vs. Breadth</dt>
+  <dd>MCTS naturally allocates more simulations to promising regions (depth) while still sampling diverse branches (breadth), unlike fixed-depth search which cuts off uniformly.</dd>
+
+  <dt>Rollout Policy Quality vs. Speed</dt>
+  <dd>Using a smarter (heuristic-guided) rollout produces more realistic simulations but reduces the number of simulations possible per second. A random rollout is fast but noisy.</dd>
+
+  <dt>Tree Width vs. Memory</dt>
+  <dd>Keeping more child nodes expands the tree's coverage but consumes more memory per simulation. MCTS typically only expands promising nodes incrementally.</dd>
+</dl>
+</body>
+</html>

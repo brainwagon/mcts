@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0005: Handling Stochastic Games</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout strong { color: #856404; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info strong { color: #0c5460; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design strong { color: #1d6f42; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; overflow-x: auto; line-height: 1.5; white-space: pre; }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .code-block .hl { background: #313244; display: inline-block; width: 100%; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn { background: #16213e; color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem; transition: background 0.15s; }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  .figure-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; text-align: center; font-size: 0.9rem; }
+  @media (max-width: 600px) { .container { padding: 1.5rem 1rem; } h1 { font-size: 1.4rem; } .code-block { font-size: 0.75rem; padding: 0.8rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0005: Handling Stochastic Games</h1>
+<p class="subtitle">Dice rolls, shuffled decks, and other random elements in the game tree.</p>
+
+<h2>1. The Challenge of Randomness</h2>
+<p>
+    So far we've assumed deterministic games: the same move from the same state always produces the same next state. But many games include random elements &mdash; Risk has dice rolls, Backgammon has dice, Poker has shuffled decks. After a player makes a move, randomness (not a player) determines the outcome.
+</p>
+<p>
+    MCTS handles this by introducing <strong>chance nodes</strong> into the tree &mdash; nodes where "nature" or "the dice" makes the decision instead of a player.
+</p>
+
+<div class="figure-box">
+    <strong>Deterministic tree:</strong><br>
+    Player move &rarr; Player move &rarr; Player move &rarr; Terminal<br><br>
+    <strong>Stochastic tree:</strong><br>
+    Player move &rarr; <span style="color:#e94560; font-weight:700;">Dice roll</span> &rarr; Player move &rarr; <span style="color:#e94560; font-weight:700;">Dice roll</span> &rarr; Terminal
+</div>
+
+<h2>2. Modelling Chance Nodes</h2>
+<p>
+    A chance node represents a random event with known probabilities. In Risk, when you attack $D$ defenders with $A$ attackers, the outcome is determined by dice rolls. The possible outcomes (how many armies each side loses) have computable probabilities.
+</p>
+
+<p>We model this by making <tt>expand()</tt> and <tt>apply()</tt> aware of chance:</p>
+
+<div class="code-block">
+<span class="cm"># Inside a Risk-style state:</span>
+<span class="kw">def</span> <span class="fn">apply</span>(self, move):
+    <span class="cm">"""Return a new state after making `move`.</span>
+<span class="cm">       If the move involves randomness, return a ChanceState that</span>
+<span class="cm">       stores the possible outcomes with their probabilities."""</span>
+    <span class="kw">if</span> <span class="fn">isinstance</span>(move, <span class="cls">AttackMove</span>):
+        outcomes = <span class="fn">compute_attack_outcomes</span>(self, move)
+        <span class="kw">return</span> <span class="cls">ChanceState</span>(outcomes)
+    <span class="kw">else</span>:
+        <span class="kw">return</span> <span class="cls">DeterministicState</span>(self.board, self.player, move)
+</div>
+
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">ChanceState</span>:
+    <span class="cm">"""A state where randomness determines the next state(s)."""</span>
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, outcomes):
+        self.outcomes = outcomes  <span class="cm"># list of (probability, resulting_state)</span>
+
+    <span class="kw">def</span> <span class="fn">legal_moves</span>(self):
+        <span class="cm">""""Moves" are the possible random outcomes."""</span>
+        <span class="kw">return</span> [i <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="fn">len</span>(self.outcomes))]
+
+    <span class="kw">def</span> <span class="fn">apply</span>(self, outcome_index):
+        <span class="cm">"""Resolve the chance event to a specific outcome."""</span>
+        _, next_state = self.outcomes[outcome_index]
+        <span class="kw">return</span> next_state
+
+    <span class="kw">def</span> <span class="fn">is_terminal</span>(self):
+        <span class="kw">return</span> <span class="kw">False</span>
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Note:</strong> The tree now interleaves player-decision nodes (where UCT selects) with chance nodes (where random outcomes are explored). When Selection reaches a chance node, it still descends into a child &mdash; but the "selection" among outcomes is not strategic; it's just ensuring all outcomes get sampled.
+</div>
+
+<h2>3. Two Approaches to Chance</h2>
+
+<h3>3.1 Explicit Chance Nodes (Tree-Integrated)</h3>
+<p>
+    Chance outcomes are stored as actual tree nodes. Selection descends into them like normal children. UCT is used for both player moves and chance outcomes &mdash; though the interpretation differs: for chance nodes, UCT ensures all outcomes are explored proportionally.
+</p>
+
+<table>
+    <tr><th></th><th>Player Decision Node</th><th>Chance Node</th></tr>
+    <tr><td><strong>Selection policy</strong></td><td>UCT (exploration vs. exploitation)</td><td>UCT (ensures all outcomes sampled)</td></tr>
+    <tr><td><strong>Visits $n$</strong></td><td>How often this move was chosen</td><td>How often this outcome was sampled</td></tr>
+    <tr><td><strong>Reward $w$</strong></td><td>Wins for the player who moved here</td><td>Wins aggregated over this outcome</td></tr>
+    <tr><td><strong>Branching</strong></td><td>Number of legal moves</td><td>Number of possible random outcomes</td></tr>
+</table>
+
+<h3>3.2 Open Loop MCTS (Implicit Chance)</h3>
+<p>
+    A simpler approach: instead of storing states in the tree, the tree only stores <strong>action sequences</strong>. During <tt>tree_policy</tt>, when traversing an action edge, the game engine resolves the randomness on the fly. The MCTS node doesn't cache the resulting state; it just accumulates the average rewards of all the random outcomes generated over many visits.
+</p>
+
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">MCTSNode</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, parent, action):
+        self.action = action  <span class="cm"># we only store the action, not the state!</span>
+        <span class="cm"># ...</span>
+
+<span class="cm"># During traversal:</span>
+state = state.<span class="fn">apply</span>(node.action)  <span class="cm"># samples random dice dynamically!</span>
+</div>
+
+<div class="callout-design">
+    <strong>&#129504; Tradeoff: Explicit vs. Open Loop</strong><br><br>
+    <table>
+        <tr><th>Approach</th><th>Pros</th><th>Cons</th></tr>
+        <tr><td>Explicit (chance nodes)</td><td>More accurate statistics per outcome; can prune low-probability branches</td><td>Explodes tree size (each chance outcome multiplies branching factor)</td></tr>
+        <tr><td>Open Loop (action nodes)</td><td>Simple; no tree bloat; perfectly handles large outcome spaces</td><td>Cannot distinguish between lucky vs unlucky paths directly in the tree</td></tr>
+    </table>
+    <br>
+    <strong>Recommendation:</strong> Start with Open Loop MCTS for high-variance games like Yahtzee. Move to explicit chance nodes only if your game has a small number of critical random outcomes (like Backgammon dice).
+</div>
+
+<h2>4. Tuning $C_p$ for Stochastic Games</h2>
+<p>
+    As discussed in Lesson 0001, stochastic games benefit from <strong>higher $C_p$</strong>. Because the same move can produce different results (due to dice), you need more exploration to average out the noise.
+</p>
+
+<table>
+    <tr><th>$C_p$ Range</th><th>Use Case</th></tr>
+    <tr><td>$1.0$ &ndash; $1.5$</td><td>Deterministic games (Chess, Go, Checkers)</td></tr>
+    <tr><td>$1.5$ &ndash; $2.5$</td><td>Mild randomness (Backgammon with doubling cube)</td></tr>
+    <tr><td>$2.5$ &ndash; $5.0$</td><td>High randomness (Risk, Yahtzee, random card draws)</td></tr>
+</table>
+
+<h2>5. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Stochastic Games</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. What is a chance node in MCTS?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">A node where the player makes a risky move</button>
+      <button class="quiz-btn" data-answer="correct">A node representing a random event (dice roll, card draw)</button>
+      <button class="quiz-btn" data-answer="wrong">A node that has a low win rate</button>
+    </div>
+    <div class="quiz-feedback">Correct! Chance nodes model events where randomness, not a player, determines the outcome.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. In Open Loop MCTS, how does the tree handle random game states?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">It caches every random state as a separate node</button>
+      <button class="quiz-btn" data-answer="correct">Nodes only store actions, and states are re-sampled dynamically during traversal</button>
+      <button class="quiz-btn" data-answer="wrong">It removes random actions from untried moves</button>
+    </div>
+    <div class="quiz-feedback">Correct! Open Loop MCTS prevents tree bloat and "optimism" bugs by representing action paths in the tree and re-sampling the actual state (like dice rolls) on the fly.</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. Should $C_p$ be higher or lower for stochastic games?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Lower</button>
+      <button class="quiz-btn" data-answer="correct">Higher</button>
+      <button class="quiz-btn" data-answer="wrong">Same</button>
+    </div>
+    <div class="quiz-feedback">Correct! Randomness adds noise to each outcome, so you need more exploration (higher $C_p$) to gather enough samples to average out the variance.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What is the main downside of explicit chance nodes?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">They make UCT invalid</button>
+      <button class="quiz-btn" data-answer="correct">They multiply the branching factor, growing the tree rapidly</button>
+      <button class="quiz-btn" data-answer="wrong">They require the rollout policy to change</button>
+    </div>
+    <div class="quiz-feedback">Correct! Each chance outcome adds one branch. If a die roll has 6 outcomes and the player has 10 legal moves, the branching factor at that level is 60 &mdash; the tree grows fast.</div>
+  </div>
+</div>
+
+<h2>6. Summary</h2>
+<ul>
+    <li><strong>Stochastic games</strong> include random elements (dice, cards).</li>
+    <li><strong>Chance nodes</strong> model random events as explicit tree nodes with probability-weighted children.</li>
+    <li><strong>Open Loop MCTS</strong> resolves randomness on the fly during traversal without storing states in nodes, naturally averaging out chance events.</li>
+    <li>Start with Open Loop MCTS for stochastic games; use explicit chance only for small, critical chance spaces.</li>
+    <li>Higher $C_p$ values help average out noise in stochastic games.</li>
+</ul>
+
+<p class="cite">
+    <strong>References:</strong> Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG. &bull; Lanctot, M. et al. (2009). <em>Monte Carlo Tree Search in Games with Imperfect Information.</em> AIIDE 2009.
+</p>
+
+<div class="callout-info">
+    <strong>&#128172; Up next:</strong> Lesson 0006 &mdash; <strong>Memory, Parallelism, and Advanced Tradeoffs</strong>. We'll cover tree reuse, multi-threaded search, and the final design decisions for a production engine.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

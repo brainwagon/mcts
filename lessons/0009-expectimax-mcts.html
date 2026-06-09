@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0009: ExpectiMax MCTS for Stochastic Games</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; overflow-x: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0009: ExpectiMax MCTS for Stochastic Games</h1>
+<p class="subtitle">Why searching deeper can sometimes make you play worse, and how explicitly modeling chance nodes fixes it.</p>
+
+<h2>1. The Open-Loop Paradox</h2>
+<p>
+    In Lesson 0008, we encountered a fascinating paradox in our Yahtzee engine:
+</p>
+<ul>
+    <li>The pure rollout heuristic (0-ply search) averaged <strong>~191 points</strong>.</li>
+    <li>Running MCTS with that exact same heuristic for 500 iterations averaged <strong>~156 points</strong>.</li>
+</ul>
+<p>
+    How can adding search make the agent perform <em>worse</em>? The culprit is our use of an <strong>Open-Loop</strong> tree architecture in a highly stochastic game.
+</p>
+<p>
+    In Open-Loop MCTS, tree nodes represent <em>actions</em> rather than <em>states</em>. A path through the tree looks like this: 
+    <br><code>Root &rarr; Keep(1,1) &rarr; Score(Ones) &rarr; Keep(2,2)</code>
+</p>
+<p>
+    Because it only branches on actions, the tree assumes it can commit to a sequence of moves <em>without knowing the outcome of the random dice rolls in between them</em>. If a random simulation happens to roll lucky 2s on the third turn, the UCB formula artificially inflates the value of that entire blind sequence. The MCTS ends up overriding the sensible root heuristic in favor of rigid, hallucinated action sequences.
+</p>
+
+<h2>2. Game Features that Break Open-Loop MCTS</h2>
+<p>
+    Open-Loop MCTS is not universally bad. It works brilliantly in games with hidden information (like choosing to draw a card in Blackjack before you know what the card is). However, it catastrophically fails in games that possess these two features:
+</p>
+<ol>
+    <li><strong>Fully Observable Chance Outcomes:</strong> In Yahtzee, the random event (rolling dice) happens, and the player gets to observe the outcome <em>before</em> making their next decision.</li>
+    <li><strong>State-Dependent Action Value:</strong> The optimal action depends entirely on the chance outcome. The decision to "Score Yahtzee" is objectively brilliant if you rolled five 6s, and objectively terrible if you rolled a small straight.</li>
+</ol>
+<div class="callout">
+    <strong>The Core Problem:</strong> Yahtzee is a <em>Markov Decision Process (MDP)</em>. Open-Loop MCTS attempts to solve an MDP by guessing an optimal sequence of actions, rather than guessing an optimal <strong>policy</strong> (a mapping of states to actions).
+</div>
+
+<h2>3. The Solution: ExpectiMax MCTS (Closed-Loop)</h2>
+<p>
+    To fix this, we must transition to a <strong>Closed-Loop MCTS</strong> (often implemented as ExpectiMax MCTS). In this architecture, the tree explicitly branches not just on the player's choices, but on the environment's random outcomes.
+</p>
+<p>
+    The tree alternate between two types of nodes:
+</p>
+<ul>
+    <li><strong>Decision Nodes:</strong> It is the player's turn to act. The children of this node represent all legal <em>Actions</em>. The value of this node is determined by the UCB formula (maximizing the best action).</li>
+    <li><strong>Chance Nodes:</strong> The player has taken a stochastic action (like `KEEP`), and the environment must respond. The children of this node represent all possible <em>Random Outcomes</em> (the newly rolled dice). The value of this node is the <strong>Expected Value</strong> (the weighted average) of its children.</li>
+</ul>
+
+<h3>Visualizing the Tree</h3>
+<div class="code-block">
+[Decision Node] State: Dice [1, 2, 3, 4, 6], Rolls Left: 1
+    |
+    +-- (Action: KEEP 1,2,3,4) --> [Chance Node] Keeping 4 dice, rolling 1
+                                       |
+                                       +-- (Outcome: Roll 1) --> [Decision Node] State: [1,1,2,3,4] (1/6 prob)
+                                       +-- (Outcome: Roll 2) --> [Decision Node] State: [1,2,2,3,4] (1/6 prob)
+                                       +-- (Outcome: Roll 5) --> [Decision Node] State: [1,2,3,4,5] (1/6 prob)
+</div>
+
+<h2>4. Why ExpectiMax Fixes the Paradox</h2>
+<p>
+    By adding Chance Nodes, the tree is no longer forced to commit to a blind sequence of actions. 
+</p>
+<p>
+    When the MCTS traverses down the tree and chooses an action at a Decision Node, it hits a Chance Node. The simulation then randomly rolls the dice, and the tree branches down to a <em>new Decision Node</em> specific to that exact dice roll. 
+</p>
+<p>
+    Because the child node represents the true game state, the MCTS can learn a highly specific, reactive policy: <em>"If I take this KEEP action, and I happen to roll a 5, my next action will be to Score Large Straight. But if I roll a 1, my next action will be to Keep the 1s."</em>
+</p>
+<div class="callout-design">
+    <strong>Implementation Details:</strong> In standard ExpectiMax MCTS, when traversing a Chance Node during the Selection phase, you don't use UCB. You simply sample an outcome based on the environment's probability distribution (e.g., rolling a random die). During Backpropagation, the Chance Node's value updates as the mathematical average of all simulations that passed through it.
+</div>
+<p>
+    By making the tree structurally aware of the environment's randomness, MCTS stops hallucinating rigid paths and instead learns flexible, reactive strategies, allowing deep searches to achieve true expert-level play.
+</p>
+
+</div>
+</body>
+</html>

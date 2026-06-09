@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0004: Backpropagation and the Full Loop</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #1a1a2e;
+    background: #f8f9fa;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout strong { color: #856404; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info strong { color: #0c5460; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design strong { color: #1d6f42; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; overflow-x: auto; line-height: 1.5; white-space: pre; }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .code-block .hl { background: #313244; display: inline-block; width: 100%; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn { background: #16213e; color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem; transition: background 0.15s; }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  .figure-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; text-align: center; font-size: 0.9rem; }
+  @media (max-width: 600px) { .container { padding: 1.5rem 1rem; } h1 { font-size: 1.4rem; } .code-block { font-size: 0.75rem; padding: 0.8rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0004: Backpropagation and the Full Loop</h1>
+<p class="subtitle">Completing the four-phase cycle &mdash; how rewards flow up the tree and the engine takes shape.</p>
+
+<h2>1. What Backpropagation Does</h2>
+<p>
+    After the Simulation phase returns a reward, we need to update every node that was visited during this MCTS iteration. This is <strong>Backpropagation</strong> (also called <strong>backup</strong>). Each node along the path gets two updates:
+</p>
+<ul>
+    <li>$n(s) \mathrel{+}= 1$ &mdash; increment visit count</li>
+    <li>$w(s) \mathrel{+}= \text{reward}$ &mdash; add the simulation result</li>
+</ul>
+
+<p>
+    The reward travels up from the leaf (the node that was just expanded and simulated) all the way back to the root. Every node on that path learns from the outcome.
+</p>
+
+<h2>2. The Reward Sign Problem</h2>
+<p>
+    In a two-player zero-sum game, what's good for the current player is bad for the opponent. If we simulate from a node where it's White's turn and White wins, the reward is $+1$ for that node. But from the <em>parent</em> node (where it was Black's turn), a White win is a loss &mdash; so the reward should be negated.
+</p>
+
+<p>
+    There are two common approaches:
+</p>
+
+<h3>2.1 Alternating Sign (Standard)</h3>
+<p>
+    Negate the reward at each level as you ascend. This is the most principled approach for two-player games.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">backpropagate</span>(node, reward):
+    <span class="cm">"""Walk up the tree, updating stats. Negate reward at each level."""</span>
+    <span class="kw">while</span> node <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+        node.visits += <span class="num">1</span>
+        node.wins += reward
+        node = node.parent
+        reward = -reward  <span class="cm"># flip for the other player</span>
+</div>
+
+<div class="callout">
+    <strong>&#9888;&#65039; Zero-sum assumption:</strong> This negation works for zero-sum games where a win for one player is a loss for the other. For games with draws, the reward is $+0.5$ for both sides &mdash; it passes through negation as $-0.5$ at the parent, which is wrong. Fix: only negate when the outcome is a decisive win ($\pm 1$), or store the reward from a fixed perspective (see below).
+</div>
+
+<h3>2.2 Fixed-Perspective Reward (Simpler)</h3>
+<p>
+    Store every node's reward from White's perspective (or Player 0's perspective). During backpropagation, don't negate &mdash; but the <tt>simulate()</tt> function must return a reward from White's perspective regardless of whose turn it is at the leaf.
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">backpropagate</span>(node, reward):
+    <span class="cm">"""Walk up the tree, updating stats. No sign flip needed.</span>
+<span class="cm">       Reward must already be from a fixed global perspective."""</span>
+    <span class="kw">while</span> node <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+        node.visits += <span class="num">1</span>
+        node.wins += reward
+        node = node.parent
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Which to choose?</strong> The alternating-sign approach matches the theory (each node tracks wins for the player who moved to it). The fixed-perspective approach is simpler to implement because there's no logic for draws vs. wins. Choose alternating-sign for clarity and correctness; choose fixed-perspective for simplicity. Both work in practice.
+</div>
+
+<h2>3. The Complete Iteration (All Four Phases)</h2>
+
+<div class="code-block">
+<span class="kw">import</span> math
+<span class="kw">import</span> random
+
+<span class="kw">def</span> <span class="fn">mcts_iteration</span>(root, Cp=<span class="num">1.414</span>):
+    <span class="cm"># 1. SELECTION &mdash; descend to a frontier or terminal node</span>
+    node = <span class="fn">tree_policy</span>(root, Cp)
+
+    <span class="cm"># 2. EXPANSION &mdash; if not terminal, add one new child</span>
+    <span class="kw">if</span> <span class="kw">not</span> node.is_terminal:
+        node = <span class="fn">expand</span>(node)
+
+    <span class="cm"># 3. SIMULATION &mdash; rollout from the new/terminal node</span>
+    reward = <span class="fn">simulate</span>(node)
+
+    <span class="cm"># 4. BACKPROPAGATION &mdash; update stats up the tree</span>
+    <span class="fn">backpropagate</span>(node, reward)
+</div>
+
+<p>
+    And the top-level search function that ties everything together:
+</p>
+
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">mcts_search</span>(root_state, iterations=<span class="num">1000</span>, Cp=<span class="num">1.414</span>):
+    <span class="cm">"""Run MCTS from root_state, return the best action."""</span>
+    root = <span class="cls">MCTSNode</span>(root_state)
+
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(iterations):
+        <span class="fn">mcts_iteration</span>(root, Cp)
+
+    best = <span class="fn">best_move</span>(root)
+    <span class="kw">return</span> best.state.last_action
+</div>
+
+<h2>4. Full Trace Through One Iteration</h2>
+<p>
+    Let's watch one complete cycle on a tiny tree to see every phase in action:
+</p>
+
+<div class="figure-box">
+    <strong>Initial tree:</strong> Root (N=10, W=7) has children A (n=4, w=3) and B (n=6, w=4).<br>
+    Root still has one untried move C.
+</div>
+
+<div class="code-block">
+<span class="cm">// Phase 1: tree_policy(root)</span>
+<span class="cm">//   root is not fully expanded (C untried) &rarr; returns root for expansion</span>
+
+<span class="cm">// Phase 2: expand(root)</span>
+<span class="cm">//   pops C, applies it, creates child C (state_C, parent=root)</span>
+root.children = [A, B, C]
+
+<span class="cm">// Phase 3: simulate(C)</span>
+<span class="cm">//   random rollout from state_C ... White wins &rarr; reward = +1</span>
+
+<span class="cm">// Phase 4: backpropagate(C, +1)</span>
+<span class="cm">//   C: visits=1, wins=1    (White's turn reward += +1)</span>
+<span class="cm">//   root: visits=11, wins=8 (Black's turn reward += -1 ... wait, negated!)</span>
+</div>
+
+<div class="callout-info">
+    <strong>&#128161; Sign walkthrough:</strong> If C was reached on White's turn and White won (reward $+1$), backpropagating with alternating sign gives C $+1$ (good for White), but root (which was Black's turn when White moved to C) gets $-1$ (good for Black means White's win is bad). Root's wins decrease, which is correct &mdash; it was a bad move for Black.
+</div>
+
+<h2>5. The Complete Engine Contract</h2>
+<p>
+    Here's the full interface your game-specific <tt>state</tt> object must implement:
+</p>
+
+<table>
+    <tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+    <tr><td><tt>legal_moves()</tt></td><td><tt>list</tt></td><td>All legal moves from this state</td></tr>
+    <tr><td><tt>is_terminal()</tt></td><td><tt>bool</tt></td><td>True if the game is over</td></tr>
+    <tr><td><tt>apply(move)</tt></td><td><tt>State</tt></td><td>Return a new state after making <tt>move</tt></td></tr>
+    <tr><td><tt>clone()</tt></td><td><tt>State</tt></td><td>Return an independent copy</td></tr>
+    <tr><td><tt>reward()</tt></td><td><tt>float</tt></td><td>Terminal reward from current player's perspective</td></tr>
+    <tr><td><tt>last_action</tt></td><td><tt>move</tt></td><td>Property storing the move that led to this state</td></tr>
+</table>
+
+<div class="callout-design">
+    <strong>&#129504; Design reflection:</strong> With these six methods, MCTS is completely <strong>game-agnostic</strong>. The same <tt>mcts_search</tt> function works for Chess, Checkers, Go, Tic-Tac-Toe, and even non-game tree-search problems. You swap in a new state object and the algorithm adapts automatically. This is the power of the abstraction.
+</div>
+
+<h2>6. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Backpropagation and the Full Loop</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. What two statistics does backpropagation update at each node?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">$n(s)$ and $C_p$</button>
+      <button class="quiz-btn" data-answer="correct">$n(s)$ (visit count) and $w(s)$ (total reward)</button>
+      <button class="quiz-btn" data-answer="wrong">$w(s)$ and the child list</button>
+    </div>
+    <div class="quiz-feedback">Correct! Each visited node increments its visit count $n$ and adds the (possibly negated) reward to its total $w$.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. In alternating-sign backpropagation for a two-player game, what happens to the reward at each level?</p>
+    <div>
+      <button class="quiz-btn" data-answer="correct">It is negated (multiplied by $-1$)</button>
+      <button class="quiz-btn" data-answer="wrong">It stays the same</button>
+      <button class="quiz-btn" data-answer="wrong">It is divided by the branching factor</button>
+    </div>
+    <div class="quiz-feedback">Correct! What's a win for the current player is a loss for the opponent at the parent level, so the sign flips at each step up the tree.</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. How many game-specific methods does the state object need to implement?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Three</button>
+      <button class="quiz-btn" data-answer="wrong">Four</button>
+      <button class="quiz-btn" data-answer="correct">Six: legal_moves, is_terminal, apply, clone, reward, last_action</button>
+    </div>
+    <div class="quiz-feedback">Correct! The MCTS engine is completely agnostic to the game &mdash; it only depends on these six methods. Everything else is generic.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What path does backpropagation follow through the tree?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">From root to the expanded node</button>
+      <button class="quiz-btn" data-answer="correct">From the expanded/simulated node back up to root</button>
+      <button class="quiz-btn" data-answer="wrong">All nodes in the tree</button>
+    </div>
+    <div class="quiz-feedback">Correct! Backpropagation walks the <em>exact path</em> that Selection followed, in reverse &mdash; from leaf back to root.</div>
+  </div>
+</div>
+
+<h2>7. Summary</h2>
+<ul>
+    <li><strong>Backpropagation</strong> walks from leaf to root, incrementing $n$ and adding $w$ at each node.</li>
+    <li>Reward sign alternates at each level for two-player zero-sum games.</li>
+    <li>Draws ($+0.5$) need special handling with alternating sign (only negate $\pm 1$).</li>
+    <li>The complete engine needs exactly six game-specific methods.</li>
+    <li><tt>mcts_search</tt> is the top-level function: build root, loop iterations, return best action.</li>
+</ul>
+
+<p class="cite">
+    <strong>References:</strong> Browne, C. et al. (2012). <em>A Survey of Monte Carlo Tree Search Methods.</em> IEEE Trans. CIAG. &bull; Coulom, R. (2006). <em>Efficient Selectivity and Backpropagation in Monte-Carlo Tree Search.</em> CG 2006.
+</p>
+
+<div class="callout-info">
+    <strong>&#128172; Up next:</strong> Lesson 0005 &mdash; <strong>Handling Stochastic Games</strong> (dice, shuffled decks, randomness). This is where we tackle Risk-like games with chance nodes.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

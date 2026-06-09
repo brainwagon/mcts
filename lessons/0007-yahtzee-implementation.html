@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0007: MCTS Plays Yahtzee — Complete Implementation</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout strong { color: #856404; }
+  .callout-info { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-info strong { color: #0c5460; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design strong { color: #1d6f42; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; overflow-x: auto; line-height: 1.5; white-space: pre; }
+  .code-block .kw { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .cm { color: #6c7086; font-style: italic; }
+  .code-block .str { color: #a6e3a1; }
+  .code-block .num { color: #fab387; }
+  .code-block .cls { color: #f9e2af; }
+  .code-block .op { color: #89dceb; }
+  .quiz { margin: 1.5rem 0; border: 2px solid #e94560; border-radius: 12px; padding: 1.2rem; }
+  .quiz h3 { margin-top: 0; color: #e94560; }
+  .quiz-question { margin: 1rem 0; }
+  .quiz-question p { font-weight: 500; margin-bottom: 0.4rem; }
+  .quiz-btn { background: #16213e; color: #fff; border: none; border-radius: 6px; padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; margin-right: 0.4rem; margin-bottom: 0.3rem; transition: background 0.15s; }
+  .quiz-btn:hover { background: #0f3460; }
+  .quiz-btn.correct { background: #28a745; }
+  .quiz-btn.wrong { background: #dc3545; }
+  .quiz-feedback { margin-top: 0.6rem; padding: 0.6rem; border-radius: 6px; font-size: 0.9rem; display: none; }
+  .quiz-feedback.show { display: block; }
+  .quiz-feedback.correct { background: #d4edda; color: #155724; }
+  .quiz-feedback.wrong { background: #f8d7da; color: #721c24; }
+  .cite { font-size: 0.85rem; color: #6c757d; }
+  .cite a { color: #533483; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 0.4rem 0.5rem; }
+  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
+  .figure-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; text-align: center; font-size: 0.9rem; }
+  @media (max-width: 600px) { .container { padding: 1.5rem 1rem; } h1 { font-size: 1.4rem; } .code-block { font-size: 0.75rem; padding: 0.8rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0007: MCTS Plays Yahtzee</h1>
+<p class="subtitle">A complete, runnable MCTS engine for Yahtzee &mdash; demonstrating stochastic actions, single-player adaptation, and heuristic rollouts in one compact implementation.</p>
+
+<h2>1. Why Yahtzee?</h2>
+<p>
+    Yahtzee is an ideal test case for bringing together every concept from this course:
+</p>
+<ul>
+    <li><strong>High branching factor</strong> &mdash; up to 32 keep-masks plus 13 scoring categories</li>
+    <li><strong>Randomness</strong> &mdash; dice rolls are stochastic transitions</li>
+    <li><strong>Single-player optimization</strong> &mdash; no opponent, so no sign alternation in backpropagation</li>
+    <li><strong>Deep strategy</strong> &mdash; when to score vs. re-roll, which categories to fill first, Yahtzee bonus chasing</li>
+</ul>
+
+<h2>2. Key Design Decisions</h2>
+
+<h3>2.1 MCTS Action Space</h3>
+<p>
+    Two kinds of actions (the same as Lesson 0005's stochastic game pattern):
+</p>
+<ul>
+    <li><strong>KEEP(<em>mask</em>)</strong> &mdash; keep a subset of dice and re-roll the rest. This is a <em>stochastic</em> transition (dice outcomes are random).</li>
+    <li><strong>SCORE(<em>category</em>)</strong> &mdash; score the current dice in a category. This is a <em>deterministic</em> scoring action, but transitioning to the next turn rolls new random dice.</li>
+</ul>
+
+<h3>2.2 Open Loop MCTS for Chance Nodes</h3>
+<p>
+    Because Yahtzee involves random dice rolls, storing specific deterministic game states inside the tree nodes causes "optimism" bugs (the AI might assume it will always get the lucky dice it rolled when first expanding a node). Instead, we use <strong>Open Loop MCTS</strong>: the tree nodes only represent <em>action sequences</em>, and the actual game state is dynamically re-sampled during each tree traversal by applying the actions.
+</p>
+
+<h3>2.3 Single-Player Reward</h3>
+<p>
+    Yahtzee has no opponent. The reward is the <strong>final total score</strong> at the terminal state (all 13 categories filled). Backpropagation does <em>not</em> alternate sign &mdash; every node along the path adds the same positive reward. UCT selects children that maximize the <em>average final score</em> from that state.
+</p>
+
+<h3>2.4 Proper $C_p$ Scaling</h3>
+<p>
+    Yahtzee scores are typically around 100&ndash;300 points. The standard $C_p$ of 2.5 assumes normalized rewards between [0, 1]. For unnormalized scores, we scale $C_p$ to 10.0 to properly balance exploration and exploitation without acting purely greedily or purely randomly.
+</p>
+
+<h3>2.5 Rollout Policy</h3>
+<p>
+    Pure random rollouts would produce terrible Yahtzee play (randomly re-rolling random dice). Instead, we use a simple heuristic:
+</p>
+<ol>
+    <li>If any available category scores &ge; 20 points from the current dice, score it immediately.</li>
+    <li>Otherwise, keep dice that show the most frequent value (building toward N-of-a-kind) and re-roll the rest.</li>
+</ol>
+
+<h2>3. The Code</h2>
+<p>
+    The complete implementation is in <strong><tt>yahtzee_mcts.py</tt></strong>, a single ~250-line Python file. Here are the key sections:
+</p>
+
+<h3>3.1 Scoring</h3>
+<div class="code-block">
+<span class="cm"># Category scoring for all 13 Yahtzee categories (0&ndash;12).</span>
+<span class="cm"># Returns the points earned (0 for invalid/unfilled).</span>
+<span class="kw">def</span> <span class="fn">score_dice</span>(dice, category):
+    counts = [dice.count(v) <span class="kw">for</span> v <span class="kw">in</span> <span class="fn">range</span>(<span class="num">1</span>, <span class="num">7</span>)]
+    <span class="kw">if</span> category &lt; <span class="num">6</span>:     <span class="cm"># Upper section: Ones through Sixes</span>
+        <span class="kw">return</span> (category + <span class="num">1</span>) * counts[category]
+    <span class="kw">if</span> category == <span class="num">6</span>:    <span class="cm"># Three of a Kind</span>
+        <span class="kw">return</span> <span class="fn">sum</span>(dice) <span class="kw">if</span> <span class="fn">max</span>(counts) &gt;= <span class="num">3</span> <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">7</span>:    <span class="cm"># Four of a Kind</span>
+        <span class="kw">return</span> <span class="fn">sum</span>(dice) <span class="kw">if</span> <span class="fn">max</span>(counts) &gt;= <span class="num">4</span> <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">8</span>:    <span class="cm"># Full House (3+2)</span>
+        <span class="kw">return</span> <span class="num">25</span> <span class="kw">if</span> <span class="fn">sorted</span>(counts) == [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">2</span>,<span class="num">3</span>] <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">9</span>:    <span class="cm"># Small Straight (4 consecutive)</span>
+        dice_set = <span class="fn">set</span>(dice)
+        straights = [{<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>}, {<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>}, {<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>,<span class="num">6</span>}]
+        <span class="kw">return</span> <span class="num">30</span> <span class="kw">if</span> <span class="fn">any</span>(s.issubset(dice_set) <span class="kw">for</span> s <span class="kw">in</span> straights) <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">10</span>:   <span class="cm"># Large Straight (5 consecutive)</span>
+        <span class="kw">return</span> <span class="num">40</span> <span class="kw">if</span> <span class="fn">sorted</span>(dice) <span class="kw">in</span> [[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>], [<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>,<span class="num">5</span>,<span class="num">6</span>]] <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">11</span>:   <span class="cm"># Yahtzee (5 of a kind)</span>
+        <span class="kw">return</span> <span class="num">50</span> <span class="kw">if</span> <span class="fn">max</span>(counts) == <span class="num">5</span> <span class="kw">else</span> <span class="num">0</span>
+    <span class="kw">if</span> category == <span class="num">12</span>:   <span class="cm"># Chance</span>
+        <span class="kw">return</span> <span class="fn">sum</span>(dice)
+</div>
+
+<h3>3.2 State and Stochastic Transitions</h3>
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">YahtzeeState</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, dice, rolls_left, scores):
+        self.dice = <span class="fn">tuple</span>(<span class="fn">sorted</span>(dice))  <span class="cm"># canonical order</span>
+        self.rolls_left = rolls_left
+        self.scores = <span class="fn">list</span>(scores)  <span class="cm"># -1 = unfilled, 13 categories</span>
+
+    <span class="kw">def</span> <span class="fn">legal_moves</span>(self):
+        moves = []
+        <span class="kw">for</span> cat <span class="kw">in</span> <span class="fn">range</span>(<span class="num">13</span>):
+            <span class="kw">if</span> self.scores[cat] &lt; <span class="num">0</span>:
+                moves.append((<span class="str">'SCORE'</span>, cat))
+        <span class="kw">if</span> self.rolls_left &gt; <span class="num">0</span> <span class="kw">and</span> <span class="kw">not</span> self.is_terminal():
+            <span class="kw">for</span> mask <span class="kw">in</span> <span class="fn">range</span>(<span class="num">1</span> &lt;&lt; <span class="num">5</span>):
+                moves.append((<span class="str">'KEEP'</span>, mask))
+        <span class="kw">return</span> moves
+
+    <span class="kw">def</span> <span class="fn">apply</span>(self, move):
+        kind, arg = move
+        <span class="kw">if</span> kind == <span class="str">'KEEP'</span>:
+            <span class="cm"># Stochastic: randomly fill non-kept positions</span>
+            new_dice = []
+            <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">5</span>):
+                <span class="kw">if</span> arg &amp; (<span class="num">1</span> &lt;&lt; i):
+                    new_dice.append(self.dice[i])
+                <span class="kw">else</span>:
+                    new_dice.append(<span class="fn">random.randint</span>(<span class="num">1</span>, <span class="num">6</span>))
+            <span class="kw">return</span> <span class="cls">YahtzeeState</span>(new_dice, self.rolls_left - <span class="num">1</span>, self.scores)
+        <span class="kw">else</span>:  <span class="cm"># SCORE</span>
+            cat = arg
+            raw = <span class="fn">score_dice</span>(self.dice, cat)
+            bonus = <span class="num">0</span>
+            <span class="cm"># Yahtzee bonus: +100 for extra Yahtzees after scoring cat 11</span>
+            <span class="kw">if</span> <span class="fn">len</span>(<span class="fn">set</span>(self.dice)) == <span class="num">1</span> <span class="kw">and</span> self.scores[<span class="num">11</span>] &gt;= <span class="num">0</span> <span class="kw">and</span> cat != <span class="num">11</span>:
+                bonus = <span class="num">100</span>
+            new_scores = <span class="fn">list</span>(self.scores)
+            new_scores[cat] = raw
+            <span class="kw">if</span> <span class="fn">all</span>(s &gt;= <span class="num">0</span> <span class="kw">for</span> s <span class="kw">in</span> new_scores):
+                <span class="cm"># Terminal state</span>
+                <span class="kw">return</span> <span class="cls">YahtzeeState</span>(self.dice, <span class="num">0</span>, new_scores)
+            <span class="cm"># Next turn: fresh roll</span>
+            fresh = <span class="fn">tuple</span>(<span class="fn">sorted</span>(<span class="fn">random.randint</span>(<span class="num">1</span>, <span class="num">6</span>) <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(<span class="num">5</span>)))
+            <span class="kw">return</span> <span class="cls">YahtzeeState</span>(fresh, <span class="num">2</span>, new_scores)
+</div>
+
+<h3>3.3 Open Loop MCTS Engine</h3>
+<p>
+    The key adaptation: <tt>MCTSNode</tt> no longer stores a <tt>YahtzeeState</tt>. It only stores the <tt>action</tt> that led to it. The state is re-sampled dynamically during the tree policy traversal.
+</p>
+
+<div class="code-block">
+<span class="kw">class</span> <span class="cls">MCTSNode</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, parent=<span class="kw">None</span>, action=<span class="kw">None</span>):
+        self.parent = parent
+        self.action = action
+        self.children = []
+        self.visits = <span class="num">0</span>
+        self.total_reward = <span class="num">0.0</span>
+        self.untried_moves = <span class="kw">None</span>
+</div>
+
+<h3>3.4 Heuristic Rollout</h3>
+<div class="code-block">
+<span class="kw">def</span> <span class="fn">simulate</span>(node):
+    state = node.state.<span class="fn">clone</span>()
+    <span class="kw">while</span> <span class="kw">not</span> state.is_terminal():
+        moves = state.legal_moves()
+        score_moves = [m <span class="kw">for</span> m <span class="kw">in</span> moves <span class="kw">if</span> m[<span class="num">0</span>] == <span class="str">'SCORE'</span>]
+        keep_moves  = [m <span class="kw">for</span> m <span class="kw">in</span> moves <span class="kw">if</span> m[<span class="num">0</span>] == <span class="str">'KEEP'</span>]
+
+        <span class="cm"># Heuristic: if any category scores &ge;20, take it.</span>
+        best_now = <span class="fn">max</span>((<span class="fn">score_dice</span>(state.dice, cat), cat)
+                        <span class="kw">for</span> cat <span class="kw">in</span> <span class="fn">range</span>(<span class="num">13</span>) <span class="kw">if</span> state.scores[cat] &lt; <span class="num">0</span>)
+        <span class="kw">if</span> best_now[<span class="num">0</span>] &gt;= <span class="num">20</span> <span class="kw">or</span> <span class="kw">not</span> keep_moves:
+            state = state.<span class="fn">apply</span>((<span class="str">'SCORE'</span>, best_now[<span class="num">1</span>]))
+        <span class="kw">else</span>:
+            <span class="cm"># Keep the most frequent die value; re-roll rest</span>
+            most_common = <span class="fn">max</span>(<span class="fn">range</span>(<span class="num">1</span>, <span class="num">7</span>), key=<span class="kw">lambda</span> v: state.dice.count(v))
+            mask = <span class="num">0</span>
+            <span class="kw">for</span> i, d <span class="kw">in</span> <span class="fn">enumerate</span>(state.dice):
+                <span class="kw">if</span> d == most_common:
+                    mask |= (<span class="num">1</span> &lt;&lt; i)
+            state = state.<span class="fn">apply</span>((<span class="str">'KEEP'</span>, mask))
+
+    <span class="kw">return</span> <span class="nb">float</span>(state.current_total())
+</div>
+
+<h2>4. Running It</h2>
+<div class="code-block">
+<span class="cm"># Play interactively (human decides each move, AI helps via MCTS):</span>
+$ python yahtzee_mcts.py
+
+<span class="cm"># Watch the AI play 100 games automatically:</span>
+$ python yahtzee_mcts.py --simulate <span class="num">100</span>
+</div>
+
+<h2>5. What to Expect</h2>
+<p>
+    With 500 iterations per decision, the AI scores around <strong>150&ndash;200 points</strong> on average. A perfect player scores ~250&ndash;300. The gap comes from:
+</p>
+<ul>
+    <li><strong>Limited iterations</strong> &mdash; more iterations = better play</li>
+    <li><strong>Simple rollout heuristic</strong> &mdash; the "keep most common" heuristic is naive; smarter heuristics improve play</li>
+    <li><strong>No explicit chance nodes</strong> &mdash; open loop MCTS elegantly averages out the randomness during tree traversal without bloating the tree.</li>
+</ul>
+
+<div class="callout-design">
+    <strong>&#129504; Experiment ideas:</strong>
+    <ul>
+        <li>Increase iterations from 500 to 5000 &mdash; how much does the score improve?</li>
+        <li>Change $C_p$ &mdash; try 1.0, 2.5, 5.0 and compare average scores</li>
+        <li>Improve the rollout heuristic &mdash; e.g., also keep pairs for Full House potential</li>
+    </ul>
+</div>
+
+<h2>6. Check Your Understanding</h2>
+
+<div class="quiz" id="quiz1">
+  <h3>&#10003; Quiz: Yahtzee MCTS</h3>
+
+  <div class="quiz-question" data-q="1">
+    <p>1. Why does this implementation use Open Loop MCTS (nodes don't store states)?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">To save memory</button>
+      <button class="quiz-btn" data-answer="correct">To properly handle stochastic dice outcomes by re-sampling them during traversal</button>
+      <button class="quiz-btn" data-answer="wrong">Because Yahtzee has hidden information</button>
+    </div>
+    <div class="quiz-feedback">Correct! By not caching states in nodes, we force the engine to re-roll the dice on every traversal, which naturally averages out the randomness of actions like KEEP over many iterations.</div>
+  </div>
+
+  <div class="quiz-question" data-q="2">
+    <p>2. How does backpropagation differ for single-player Yahtzee vs. two-player Chess?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">There's no difference</button>
+      <button class="quiz-btn" data-answer="correct">No sign alternation &mdash; every node simply adds the same positive reward</button>
+      <button class="quiz-btn" data-answer="wrong">Yahtzee uses lower $C_p$</button>
+    </div>
+    <div class="quiz-feedback">Correct! Since there's no opponent, the reward doesn't flip sign. Each node accumulates the total final score, and UCT maximizes average score.</div>
+  </div>
+
+  <div class="quiz-question" data-q="3">
+    <p>3. Why did we scale $C_p$ to 10.0 instead of using the standard 2.5?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">Because Yahtzee requires pure random exploration</button>
+      <button class="quiz-btn" data-answer="correct">Because Yahtzee rewards are unnormalized (100-300 points) instead of [0, 1]</button>
+      <button class="quiz-btn" data-answer="wrong">To prevent the tree from expanding</button>
+    </div>
+    <div class="quiz-feedback">Correct! The exploration term must be on a comparable scale to the exploitation term (the average score). For rewards in the hundreds, $C_p$ must be scaled up appropriately.</div>
+  </div>
+
+  <div class="quiz-question" data-q="4">
+    <p>4. What score does the Yahtzee bonus add?</p>
+    <div>
+      <button class="quiz-btn" data-answer="wrong">50</button>
+      <button class="quiz-btn" data-answer="correct">100 points for each additional Yahtzee after scoring in the Yahtzee category</button>
+      <button class="quiz-btn" data-answer="wrong">35 (same as the upper section bonus)</button>
+    </div>
+    <div class="quiz-feedback">Correct! After marking the Yahtzee box (50 pts), each subsequent Yahtzee rolled earns a 100-point bonus.</div>
+  </div>
+</div>
+
+<h2>7. Summary</h2>
+<ul>
+    <li>Yahtzee brings together <strong>stochastic transitions</strong>, <strong>high branching factor</strong>, and <strong>single-player optimization</strong>.</li>
+    <li><strong>Open Loop MCTS</strong> avoids optimism in chance outcomes by re-sampling states dynamically instead of storing them in nodes.</li>
+    <li><strong>Scaled $C_p$</strong> balances exploration with the unnormalized high point scores of Yahtzee.</li>
+    <li>Backpropagation has no sign flip (single-player reward).</li>
+    <li>A heuristic rollout (score &ge;20 or keep most frequent) provides a baseline for the tree.</li>
+    <li>The complete implementation is ~250 lines of Python &mdash; run it with <tt>python yahtzee_mcts.py</tt>.</li>
+</ul>
+
+<p class="cite">
+    <strong>References:</strong> The complete source is in <a href="../yahtzee_mcts.py"><tt>yahtzee_mcts.py</tt></a>.
+    &bull; Yahtzee rules: <a href="https://en.wikipedia.org/wiki/Yahtzee">Wikipedia</a>.
+</p>
+
+<div class="callout-info">
+    <strong>&#127891; Series complete.</strong> With this final lesson, you have everything needed to design, implement, and extend MCTS game engines. The <tt>yahtzee_mcts.py</tt> file is a concrete starting point you can run, modify, and learn from.
+</div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.quiz-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var question = this.closest('.quiz-question');
+      var feedback = question.querySelector('.quiz-feedback');
+      var isCorrect = this.dataset.answer === 'correct';
+      question.querySelectorAll('.quiz-btn').forEach(function(b) {
+        b.disabled = true;
+        if (b.dataset.answer === 'correct') b.classList.add('correct');
+        else if (this === b) b.classList.add('wrong');
+      });
+      feedback.classList.add('show');
+      feedback.classList.add(isCorrect ? 'correct' : 'wrong');
+    });
+  });
+</script>
+</body>
+</html>

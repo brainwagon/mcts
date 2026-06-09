@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0010: Implementing ExpectiMax MCTS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #f8f9fa; line-height: 1.6; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,0.06); padding: 2.5rem 2rem; }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; color: #16213e; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-top: 2.2rem; margin-bottom: 0.6rem; color: #16213e; border-left: 4px solid #e94560; padding-left: 0.8rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.5rem; color: #0f3460; }
+  p, li { margin-bottom: 0.6rem; }
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  .subtitle { color: #6c757d; font-size: 0.95rem; margin-top: 0.3rem; }
+  .callout { background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .callout-design { background: #d5f4e6; border: 1px solid #b8e0cd; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 1.2rem; margin: 1rem 0; font-size: 0.85rem; font-family: 'JetBrains Mono', monospace; overflow-x: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lesson 0010: Implementing ExpectiMax MCTS</h1>
+<p class="subtitle">A code walkthrough transitioning our Yahtzee engine from Open-Loop to Closed-Loop ExpectiMax MCTS.</p>
+
+<h2>1. Splitting the Node Class</h2>
+<p>
+    In standard MCTS, every node is just a node. In ExpectiMax MCTS, we need to explicitly represent the alternating turns between the Player and the Environment. We split <code>MCTSNode</code> into two distinct classes:
+</p>
+<div class="code-block">class ChanceNode:
+    def __init__(self, action: Tuple[str, Any], parent: 'DecisionNode'):
+        self.action = action
+        self.parent = parent
+        self.visits = 0
+        self.total_reward = 0.0
+        # Children are specific dice outcomes, keyed by YahtzeeState
+        self.children: Dict[YahtzeeState, 'DecisionNode'] = {}
+
+class DecisionNode:
+    def __init__(self, state: YahtzeeState, parent: Optional[ChanceNode] = None):
+        self.state = state
+        self.parent = parent
+        self.visits = 0
+        self.total_reward = 0.0
+        self.untried_moves = state.legal_moves()
+        # Children are player actions, keyed by the action tuple
+        self.children: Dict[Tuple[str, Any], ChanceNode] = {}
+</div>
+<p>
+    Notice how the references alternate: a Decision Node holds Chance Nodes as children, and a Chance Node holds Decision Nodes as children.
+</p>
+
+<h2>2. State Hashing (Building a DAG)</h2>
+<p>
+    To ensure that the tree accurately learns from chance outcomes, identical dice rolls need to merge into the same state. If you roll <code>[1,2,3,4,5]</code> across three different simulations from the same action, they should all update the statistics of a single <code>DecisionNode</code>.
+</p>
+<p>
+    We achieve this by making <code>YahtzeeState</code> hashable so it can be used as a dictionary key in <code>ChanceNode.children</code>:
+</p>
+<div class="code-block">def __key(self):
+    return (self.dice, self.rolls_left, tuple(self.scores))
+
+def __eq__(self, other):
+    return self.__key() == other.__key()
+
+def __hash__(self):
+    return hash(self.__key())
+</div>
+
+<h2>3. Updating the MCTS Loop</h2>
+<p>
+    The core logic of the <code>mcts_search</code> tree policy has to handle traversing both node types.
+</p>
+<h3>Step 3a: Navigating the Decision Node</h3>
+<p>
+    At a Decision Node, the algorithm chooses a player action. It expands an untried action or selects the best explored action using the standard UCB formula.
+</p>
+<div class="code-block"># Inside mcts_search()
+# Select best action via UCB
+for action, chance_child in node.children.items():
+    exploitation = chance_child.total_reward / chance_child.visits
+    exploration = Cp * math.sqrt(math.log(node.visits) / chance_child.visits)
+    score = exploitation + exploration
+    # ... track best_chance_node ...
+</div>
+
+<h3>Step 3b: Navigating the Chance Node</h3>
+<p>
+    Once an action is selected, we are at a <code>ChanceNode</code>. We do <strong>not</strong> use UCB here. Instead, we ask the environment to give us a random outcome (roll the dice), and we see if we've encountered that exact outcome before.
+</p>
+<div class="code-block"># Sample the environment using the chosen action
+next_state = node.state.apply(best_action)
+
+# If we've never seen this exact dice outcome from this action, expand it!
+if next_state not in best_chance_node.children:
+    child_decision = DecisionNode(next_state, parent=best_chance_node)
+    best_chance_node.children[next_state] = child_decision
+    node = child_decision
+    break # Leave the tree policy loop and start the rollout!
+else:
+    # We've seen these dice before. Traverse deeper!
+    node = best_chance_node.children[next_state]
+</div>
+
+<h3>Step 3c: Backpropagation</h3>
+<p>
+    The reward from the rollout bubbles back up the tree. Because of the alternating node types, we step through two levels at a time, incrementing visits and rewards on both the Decision Node and its parent Chance Node.
+</p>
+<div class="code-block">curr = node
+while curr is not None:
+    curr.visits += 1
+    curr.total_reward += reward
+    curr = curr.parent # Move up to ChanceNode
+    if curr is not None:
+        curr.visits += 1
+        curr.total_reward += reward
+        curr = curr.parent # Move up to DecisionNode
+</div>
+
+<h2>4. Conclusion</h2>
+<p>
+    By transforming the MCTS from an Open-Loop action sequence string into a Closed-Loop ExpectiMax state tree, the AI can finally formulate reactive policies. It correctly learns that an action's value isn't just one optimistic path, but the true expected value distributed across all possible dice rolls.
+</p>
+
+<h2>5. The 50,000 Iteration Benchmark (The Curse of Dimensionality)</h2>
+<p>
+    With the architecture fixed, we benchmarked the new ExpectiMax MCTS. The results revealed a second, even deeper lesson about applying MCTS to stochastic environments:
+</p>
+<ul>
+    <li><strong>0-ply Search (Pure Heuristic):</strong> ~191.3 points</li>
+    <li><strong>ExpectiMax MCTS (500 iterations):</strong> ~152.2 points</li>
+    <li><strong>ExpectiMax MCTS (50,000 iterations):</strong> ~184.2 points</li>
+</ul>
+<p>
+    Despite explicitly modeling chance nodes, the MCTS <em>still</em> performs worse than the pure rollout heuristic! 
+</p>
+<p>
+    <strong>Why? Premature Exploitation & High Variance.</strong>
+    In Yahtzee, a <code>KEEP</code> action has up to 252 possible dice outcomes. To calculate a statistically accurate expected value for a <em>single</em> action, you need hundreds of rollouts. Across 45 possible actions, the tree is massively wide. 
+</p>
+<p>
+    With only 500 iterations, the tree starves. A terrible action might get a lucky 280-point rollout. Because our exploration constant (<code>Cp = 10.0</code>) is mathematically dwarfed by Yahtzee's 200+ point variance, the UCB formula fails to force exploration. The MCTS becomes trapped by the very first lucky rollout it sees.
+</p>
+<p>
+    Even at 50,000 iterations, the tree struggles to fully overcome the noise, climbing to 184.2 points but still failing to beat the generalized expected-value logic built into the human-designed heuristic. 
+</p>
+<div class="callout-info">
+    <strong>The Final Takeaway:</strong> ExpectiMax MCTS is structurally correct for Markov Decision Processes, but standard MCTS is fundamentally ill-suited for extremely wide chance nodes. To master Yahtzee, you must augment the tree with <strong>Progressive Widening</strong> (artificially limiting chance outcomes until a node is heavily visited), use a much higher <code>Cp</code> combined with millions of iterations, or abandon MCTS entirely in favor of <strong>Value Iteration / Dynamic Programming</strong>.
+</div>
+
+</div>
+</body>
+</html>
